@@ -1,0 +1,1 @@
+import{r as o}from"./ui-DibA924j.js";import{u as t,j as c}from"./app-KOkurMGw.js";function l(){const{favicon:n}=t();o.useEffect(()=>{if(!n)return;const r=c(n);let e=document.querySelector("link[rel*='icon']");e||(e=document.createElement("link"),e.rel="icon",document.head.appendChild(e)),e.href=r},[n])}export{l as u};

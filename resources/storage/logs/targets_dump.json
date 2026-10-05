@@ -1,0 +1,427 @@
+{
+    "targets": [
+        {
+            "id": 1,
+            "created_by": 4,
+            "user_id": 8,
+            "assigned_by": 4,
+            "parent_id": null,
+            "title": "October",
+            "period_type": "monthly",
+            "financial_year": "2027-28",
+            "quarter": "Q2",
+            "month": 9,
+            "week_number": 1,
+            "start_date": "2026-10-01",
+            "end_date": "2026-10-31",
+            "business_type": "custom",
+            "source_type": "manager_assigned",
+            "target_revenue": "1000000.00",
+            "actual_revenue": "0.00",
+            "target_new_business_revenue": "600000.00",
+            "actual_new_business_revenue": "0.00",
+            "target_upsell_revenue": "200000.00",
+            "actual_upsell_revenue": "0.00",
+            "target_renewal_revenue": "200000.00",
+            "actual_renewal_revenue": "0.00",
+            "target_mrr": "0.00",
+            "actual_mrr": "0.00",
+            "target_arr": "0.00",
+            "actual_arr": "0.00",
+            "target_new_accounts": 20,
+            "actual_new_accounts": 0,
+            "target_outreach": 400,
+            "actual_outreach": 0,
+            "target_cold_calls": 300,
+            "actual_cold_calls": 0,
+            "target_cold_emails": 500,
+            "actual_cold_emails": 0,
+            "target_linkedin_outreach": 150,
+            "actual_linkedin_outreach": 0,
+            "target_meetings": 40,
+            "actual_meetings": 0,
+            "target_demos": 20,
+            "actual_demos": 0,
+            "target_proposals": 15,
+            "actual_proposals": 0,
+            "target_followups": 200,
+            "actual_followups": 0,
+            "target_opportunities": 25,
+            "actual_opportunities": 0,
+            "pipeline_amount": "0.00",
+            "forecast_revenue": "0.00",
+            "health_status": "on_track",
+            "status": "active",
+            "notes": null,
+            "manager_feedback": null,
+            "target_history_json": [
+                {
+                    "date": "2026-09-30 10:04:23",
+                    "updated_by": "Inmogic",
+                    "reason": "Initial target assignment",
+                    "target_revenue": 1000000,
+                    "target_calls": 300,
+                    "target_meetings": 40
+                }
+            ],
+            "daily_minimums_json": {
+                "min_revenue": 45455,
+                "min_calls": 14,
+                "min_emails": 23,
+                "min_meetings": 2,
+                "min_demos": 1,
+                "min_followups": 9,
+                "min_opportunities": 1
+            },
+            "weekly_breakdown_json": [
+                {
+                    "week": "Week 1",
+                    "revenue": 200000,
+                    "meetings": 10,
+                    "demos": 5,
+                    "calls": 75
+                },
+                {
+                    "week": "Week 2",
+                    "revenue": 250000,
+                    "meetings": 10,
+                    "demos": 5,
+                    "calls": 75
+                },
+                {
+                    "week": "Week 3",
+                    "revenue": 250000,
+                    "meetings": 10,
+                    "demos": 5,
+                    "calls": 75
+                },
+                {
+                    "week": "Week 4",
+                    "revenue": 300000,
+                    "meetings": 10,
+                    "demos": 5,
+                    "calls": 75
+                }
+            ],
+            "created_at": "2026-09-30T10:04:23.000000Z",
+            "updated_at": "2026-09-30T10:04:23.000000Z",
+            "deleted_at": null,
+            "revenue_achievement_rate": 0,
+            "activity_achievement_rate": 0,
+            "overall_achievement_rate": 0,
+            "variance_revenue": -1000000,
+            "computed_health": "at_risk"
+        }
+    ],
+    "opportunities": [],
+    "users": [
+        {
+            "id": 1,
+            "name": "Super Admin",
+            "email": "admin@inmogic.com",
+            "type": "superadmin",
+            "created_by": 0
+        },
+        {
+            "id": 2,
+            "name": "Company",
+            "email": "company@example.com",
+            "type": "company",
+            "created_by": 1
+        },
+        {
+            "id": 3,
+            "name": "Robert Abbott",
+            "email": "robert.abbott.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 4,
+            "name": "Inmogic",
+            "email": "ajay@inmogic.com",
+            "type": "company",
+            "created_by": 1
+        },
+        {
+            "id": 5,
+            "name": "Aishwarya Gupta",
+            "email": "aishwarya@inmogic.com",
+            "type": "sales-team-member",
+            "created_by": 4
+        },
+        {
+            "id": 6,
+            "name": "Balram Gupta",
+            "email": "balram@inmogic.com",
+            "type": "sales-team-member",
+            "created_by": 4
+        },
+        {
+            "id": 7,
+            "name": "Abhishek Srivastava",
+            "email": "abhishek@inmogic.com",
+            "type": "sales-team-member",
+            "created_by": 4
+        },
+        {
+            "id": 8,
+            "name": "Vitoka",
+            "email": "vitoka@inmogic.com",
+            "type": "sales-team-member",
+            "created_by": 4
+        },
+        {
+            "id": 9,
+            "name": "Ajay Gupta",
+            "email": "ajay@kommify.com",
+            "type": "sales-manager",
+            "created_by": 4
+        },
+        {
+            "id": 10,
+            "name": "Super Admin",
+            "email": "superadmin@example.com",
+            "type": "superadmin",
+            "created_by": 0
+        },
+        {
+            "id": 11,
+            "name": "Stacey Beer",
+            "email": "stacey.beer.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 12,
+            "name": "Francesca Littel",
+            "email": "francesca.littel.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 13,
+            "name": "Krishna Tech",
+            "email": "krishnamohan@inmogic.com",
+            "type": "company",
+            "created_by": 1
+        },
+        {
+            "id": 14,
+            "name": "krishna",
+            "email": "krishna@innmogic.com",
+            "type": "sales",
+            "created_by": 13
+        },
+        {
+            "id": 15,
+            "name": "Amira Wintheiser",
+            "email": "amira.wintheiser.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 16,
+            "name": "Adele Stroman",
+            "email": "adele.stroman.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 18,
+            "name": "Krishnamohan Singh",
+            "email": "krishnamohan123@inmogic.com",
+            "type": "sales-manager",
+            "created_by": 4
+        },
+        {
+            "id": 19,
+            "name": "Caleigh Hackett",
+            "email": "caleigh.hackett.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 20,
+            "name": "Ollie Schulist",
+            "email": "ollie.schulist.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 22,
+            "name": "Keyshawn Muller",
+            "email": "keyshawn.muller.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 23,
+            "name": "Jerel White",
+            "email": "jerel.white.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 25,
+            "name": "Amie Powlowski",
+            "email": "amie.powlowski.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 26,
+            "name": "Sabryna D'Amore",
+            "email": "sabryna.d'amore.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 28,
+            "name": "kk",
+            "email": "kk@gmail.com",
+            "type": "company",
+            "created_by": 1
+        },
+        {
+            "id": 29,
+            "name": "Crawford Hoppe",
+            "email": "crawford.hoppe.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 30,
+            "name": "Thomas Weber",
+            "email": "thomas.weber.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 31,
+            "name": "Demarco Reynolds",
+            "email": "demarco.reynolds.13@example.com",
+            "type": "staff",
+            "created_by": 13
+        },
+        {
+            "id": 32,
+            "name": "Mariah Donnelly",
+            "email": "mariah.donnelly.28@example.com",
+            "type": "staff",
+            "created_by": 28
+        },
+        {
+            "id": 33,
+            "name": "Hanna Cronin",
+            "email": "hanna.cronin.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 34,
+            "name": "Jose Hegmann",
+            "email": "jose.hegmann.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 35,
+            "name": "Amelie Cormier",
+            "email": "amelie.cormier.13@example.com",
+            "type": "staff",
+            "created_by": 13
+        },
+        {
+            "id": 36,
+            "name": "Janessa Kerluke",
+            "email": "janessa.kerluke.28@example.com",
+            "type": "staff",
+            "created_by": 28
+        },
+        {
+            "id": 37,
+            "name": "Isabel Predovic",
+            "email": "isabel.predovic.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 38,
+            "name": "Jany Parker",
+            "email": "jany.parker.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 39,
+            "name": "Roy Pagac",
+            "email": "roy.pagac.13@example.com",
+            "type": "staff",
+            "created_by": 13
+        },
+        {
+            "id": 40,
+            "name": "Verla Kling",
+            "email": "verla.kling.28@example.com",
+            "type": "staff",
+            "created_by": 28
+        },
+        {
+            "id": 41,
+            "name": "Cyrus Kunde",
+            "email": "cyrus.kunde.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 42,
+            "name": "Ephraim Pollich",
+            "email": "ephraim.pollich.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 43,
+            "name": "Leland Tremblay",
+            "email": "leland.tremblay.13@example.com",
+            "type": "staff",
+            "created_by": 13
+        },
+        {
+            "id": 44,
+            "name": "Martine Lind",
+            "email": "martine.lind.28@example.com",
+            "type": "staff",
+            "created_by": 28
+        },
+        {
+            "id": 45,
+            "name": "Sonya Hermann",
+            "email": "sonya.hermann.2@example.com",
+            "type": "staff",
+            "created_by": 2
+        },
+        {
+            "id": 46,
+            "name": "Letha Schulist",
+            "email": "letha.schulist.4@example.com",
+            "type": "staff",
+            "created_by": 4
+        },
+        {
+            "id": 47,
+            "name": "Jaquan Abshire",
+            "email": "jaquan.abshire.13@example.com",
+            "type": "staff",
+            "created_by": 13
+        },
+        {
+            "id": 48,
+            "name": "Wayne Mitchell",
+            "email": "wayne.mitchell.28@example.com",
+            "type": "staff",
+            "created_by": 28
+        }
+    ]
+}

@@ -12,6 +12,7 @@ import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
+import { cn } from '@/lib/utils';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
     active:    { label: 'Active',    className: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' },
@@ -49,6 +50,7 @@ export default function Projects() {
     const { t } = useTranslation();
     const { auth, projects, accounts = [], allAccounts = [], users = [], allUsers = [], planLimits, stats = {}, canViewAll = false, filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-projects');
 
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
@@ -328,7 +330,22 @@ export default function Projects() {
                         return (
                             <Card
                                 key={project.id}
-                                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
+                                className={cn(
+                                    "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    router.get(route('projects.show', project.id));
+                                }}
                             >
                                 <div className="p-5 flex flex-col flex-1 gap-3">
                                     {/* Top row: name + menu */}

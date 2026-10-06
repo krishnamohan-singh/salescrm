@@ -563,9 +563,20 @@ export default function LeadTasksIndex() {
                                         return (
                                             <tr
                                                 key={task.id}
-                                                className={`hover:bg-gray-50/75 dark:hover:bg-gray-700/30 transition-colors ${
+                                                className={`hover:bg-gray-50/75 dark:hover:bg-gray-700/30 transition-colors cursor-pointer ${
                                                     task.status === 'completed' ? 'opacity-70 bg-gray-50/30 dark:bg-gray-900/10' : ''
                                                 }`}
+                                                onClick={(e) => {
+                                                    const target = e.target as HTMLElement;
+                                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                        return;
+                                                    }
+                                                    const selection = window.getSelection();
+                                                    if (selection && selection.toString().trim().length > 0) {
+                                                        return;
+                                                    }
+                                                    handleOpenEdit(task);
+                                                }}
                                             >
                                                 {/* Complete checkbox */}
                                                 <td className="py-4 pl-6 pr-3">

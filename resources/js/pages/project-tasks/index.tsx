@@ -14,6 +14,7 @@ import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import { cn } from '@/lib/utils';
 
 function ParentTaskSelect({ tasksRef, value, onChange }: { tasksRef: React.MutableRefObject<any[]>, value: string, onChange: (v: string) => void }) {
     const { t } = useTranslation();
@@ -57,6 +58,8 @@ export default function ProjectTasks() {
     const [prefilledStatus, setPrefilledStatus] = useState<string>('');
     const [kanbanData, setKanbanData] = useState<any>(null);
     const dynamicParentTasksRef = useRef<any[]>([]);
+    const isDraggingRef = useRef(false);
+    const canView = hasPermission(permissions, 'view-project-tasks');
 
     const setParentTasks = useCallback((tasks: any[]) => {
         dynamicParentTasksRef.current.splice(0, dynamicParentTasksRef.current.length, ...tasks);
@@ -400,20 +403,42 @@ export default function ProjectTasks() {
                                                 draggable={hasPermission(permissions, 'move-project-task')}
                                                 onDragStart={(e) => {
                                                     if (!hasPermission(permissions, 'move-project-task')) { e.preventDefault(); return; }
+                                                    isDraggingRef.current = true;
                                                     e.dataTransfer.setData('taskId', task.id.toString());
                                                     e.currentTarget.classList.add('opacity-50');
                                                 }}
-                                                onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
+                                                onDragEnd={(e) => {
+                                                    e.currentTarget.classList.remove('opacity-50');
+                                                    setTimeout(() => { isDraggingRef.current = false; }, 150);
+                                                }}
                                                 className={hasPermission(permissions, 'move-project-task') ? 'cursor-grab active:cursor-grabbing' : ''}
                                             >
-                                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                                                <div
+                                                    className={cn(
+                                                        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200",
+                                                        canView && "cursor-pointer"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        if (isDraggingRef.current) return;
+                                                        const target = e.target as HTMLElement;
+                                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                            return;
+                                                        }
+                                                        const selection = window.getSelection();
+                                                        if (selection && selection.toString().trim().length > 0) {
+                                                            return;
+                                                        }
+                                                        if (canView) {
+                                                            handleAction('view', task);
+                                                        }
+                                                    }}
+                                                >
                                                     <div className="p-3">
                                                         {/* Top row: title + menu */}
                                                         <div className="flex items-start gap-2.5 mb-2.5">
                                                             <div className="flex-1 min-w-0">
                                                                 <h4
-                                                                    className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate cursor-pointer hover:text-primary transition-colors"
-                                                                    onClick={() => handleAction('view', task)}
+                                                                    className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate hover:text-primary transition-colors"
                                                                 >
                                                                     {task.title}
                                                                 </h4>

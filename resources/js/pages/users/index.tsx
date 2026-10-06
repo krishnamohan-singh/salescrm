@@ -23,12 +23,14 @@ import { toast } from '@/components/custom-toast';
 import { useInitials } from '@/hooks/use-initials';
 import { useTranslation } from 'react-i18next';
 import { getDisplayUrl } from '@/utils/helper';
+import { cn } from '@/lib/utils';
 import ViewPopup from './view';
 
 export default function Users() {
     const { t } = useTranslation();
     const { auth, users, roles, planLimits, filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-users');
     const getInitials = useInitials();
 
     // State
@@ -468,7 +470,25 @@ export default function Users() {
                     {/* Grid View */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {users?.data?.map((user: any) => (
-                            <Card key={user.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                            <Card
+                                key={user.id}
+                                className={cn(
+                                    "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-200",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    handleAction('view', user);
+                                }}
+                            >
                                 <div className="p-4">
                                     {/* Top: Avatar + Name + Email */}
                                     <div className="flex items-center gap-3">

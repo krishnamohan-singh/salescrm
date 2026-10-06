@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
+import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
 import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export default function Leads() {
     const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const importingRef = useRef(false);
+    const isDraggingRef = useRef(false);
     const [convertType, setConvertType] = useState<'account' | 'contact'>('account');
     const [currentItem, setCurrentItem] = useState<any>(null);
     const [activeView, setActiveView] = useState(
@@ -147,6 +149,17 @@ export default function Leads() {
                 setIsConvertModalOpen(true);
                 break;
         }
+    };
+
+    const canView = hasPermission(permissions, 'view-leads');
+
+    const handleRowClick = (lead: any, e?: React.MouseEvent) => {
+        if (!canView) return;
+        if (e && (e.metaKey || e.ctrlKey)) {
+            window.open(route('leads.show', lead.id), '_blank');
+            return;
+        }
+        router.get(route('leads.show', lead.id));
     };
 
     const handleAddNew = () => {
@@ -339,7 +352,7 @@ export default function Leads() {
                     <div className="flex items-center gap-3">
                         <UserInitials name={row.name} />
                         <div>
-                            <div className="font-medium">{row.name}</div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors">{row.name}</div>
                             <div className="text-sm text-muted-foreground">{row.email || t('No email')}</div>
                         </div>
                     </div>
@@ -600,6 +613,7 @@ export default function Leads() {
                             edit: 'edit-leads',
                             delete: 'delete-leads'
                         }}
+                        onRowClick={canView ? handleRowClick : undefined}
                     />
 
                     {/* Pagination section */}
@@ -705,22 +719,40 @@ export default function Leads() {
                                                 draggable={hasPermission(permissions, 'edit-leads')}
                                                 onDragStart={(e) => {
                                                     if (!hasPermission(permissions, 'edit-leads')) { e.preventDefault(); return; }
+                                                    isDraggingRef.current = true;
                                                     e.dataTransfer.setData('leadId', lead.id.toString());
                                                     e.currentTarget.classList.add('opacity-50');
                                                 }}
-                                                onDragEnd={(e) => e.currentTarget.classList.remove('opacity-50')}
+                                                onDragEnd={(e) => {
+                                                    e.currentTarget.classList.remove('opacity-50');
+                                                    setTimeout(() => { isDraggingRef.current = false; }, 150);
+                                                }}
                                                 className={hasPermission(permissions, 'edit-leads') ? 'cursor-grab active:cursor-grabbing' : ''}
                                             >
-                                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                                                <div
+                                                    className={cn(
+                                                        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200",
+                                                        canView && "cursor-pointer"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        if (isDraggingRef.current) return;
+                                                        const target = e.target as HTMLElement;
+                                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                            return;
+                                                        }
+                                                        const selection = window.getSelection();
+                                                        if (selection && selection.toString().trim().length > 0) {
+                                                            return;
+                                                        }
+                                                        handleRowClick(lead, e);
+                                                    }}
+                                                >
                                                     <div className="p-3">
                                                         {/* Top row: avatar + name/email + menu */}
                                                         <div className="flex items-start gap-2.5 mb-2.5">
                                                             <UserInitials name={lead.name} />
                                                             <div className="flex-1 min-w-0">
-                                                                <h4
-                                                                    className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate cursor-pointer hover:text-primary transition-colors"
-                                                                    onClick={() => handleAction('view', lead)}
-                                                                >
+                                                                <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate hover:text-primary transition-colors">
                                                                     {lead.name}
                                                                 </h4>
                                                                 <p className="text-xs text-gray-500 truncate mt-0.5">{lead.email || t('No email')}</p>
@@ -728,7 +760,12 @@ export default function Leads() {
                                                             {(hasPermission(permissions, 'view-leads') || hasPermission(permissions, 'edit-leads') || hasPermission(permissions, 'convert-leads') || hasPermission(permissions, 'delete-leads')) && (
                                                                 <DropdownMenu>
                                                                     <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0 text-gray-400 hover:text-gray-600">
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-400 hover:text-gray-600"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
                                                                             <MoreHorizontal className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>

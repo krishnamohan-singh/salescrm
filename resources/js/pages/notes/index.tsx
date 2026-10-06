@@ -16,10 +16,12 @@ import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 import { Dialog } from '@/components/ui/dialog';
 import ViewPopup from './view';
 import { Calendar } from 'lucide-react';
+import { cn } from '@/lib/utils';
 export default function Notes() {
     const { t } = useTranslation();
     const { auth, myNotes, sharedNotes, totalPersonalNotes = 0, totalSharedNotes = 0, users = [], allUsers = [], filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-notes');
 
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedCreator, setSelectedCreator] = useState(pageFilters.created_by || 'all');
@@ -258,9 +260,27 @@ export default function Notes() {
                             </h3>
                             <div className="space-y-2 overflow-y-auto flex-1 pr-1 md:pr-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
                                 {myNotesData.map((note: any) => (
-                                    <Card key={note.id} className="p-3 md:p-4 hover:shadow-md bg-white">
+                                    <Card
+                                        key={note.id}
+                                        className={cn(
+                                            "p-3 md:p-4 hover:shadow-md bg-white",
+                                            canView && "cursor-pointer"
+                                        )}
+                                        onClick={(e) => {
+                                            if (!canView) return;
+                                            const target = e.target as HTMLElement;
+                                            if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                return;
+                                            }
+                                            const selection = window.getSelection();
+                                            if (selection && selection.toString().trim().length > 0) {
+                                                return;
+                                            }
+                                            handleAction('view', note);
+                                        }}
+                                    >
                                         <div className="flex items-start justify-between mb-2">
-                                            <h4 className="font-medium cursor-pointer flex-1 truncate text-sm md:text-base">{note.title}</h4>
+                                            <h4 className="font-medium flex-1 truncate text-sm md:text-base">{note.title}</h4>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0">
@@ -289,7 +309,7 @@ export default function Notes() {
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </div>
-                                        <div className="text-sm line-clamp-2 md:line-clamp-3 cursor-pointer h-[40px] md:h-[60px] overflow-hidden" dangerouslySetInnerHTML={{ __html: note.content || t('No content') }} />
+                                        <div className="text-sm line-clamp-2 md:line-clamp-3 h-[40px] md:h-[60px] overflow-hidden" dangerouslySetInnerHTML={{ __html: note.content || t('No content') }} />
                                     </Card>
                                 ))}
                                 {myNotesData.length === 0 && (
@@ -305,9 +325,27 @@ export default function Notes() {
                             </h3>
                             <div className="space-y-2 overflow-y-auto flex-1 pr-1 md:pr-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
                                 {sharedNotesData.map((note: any) => (
-                                    <Card key={note.id} className="p-3 md:p-4 cursor-pointer hover:shadow-md bg-white">
+                                    <Card
+                                        key={note.id}
+                                        className={cn(
+                                            "p-3 md:p-4 hover:shadow-md bg-white",
+                                            canView && "cursor-pointer"
+                                        )}
+                                        onClick={(e) => {
+                                            if (!canView) return;
+                                            const target = e.target as HTMLElement;
+                                            if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                return;
+                                            }
+                                            const selection = window.getSelection();
+                                            if (selection && selection.toString().trim().length > 0) {
+                                                return;
+                                            }
+                                            handleAction('view', note);
+                                        }}
+                                    >
                                         <div className="flex items-start justify-between mb-2">
-                                            <h4 className="font-medium cursor-pointer flex-1 truncate text-sm md:text-base">{note.title}</h4>
+                                            <h4 className="font-medium flex-1 truncate text-sm md:text-base">{note.title}</h4>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0">
@@ -359,7 +397,25 @@ export default function Notes() {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
                             {myNotesData.map((note: any) => (
-                                <Card key={note.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                                <Card
+                                    key={note.id}
+                                    className={cn(
+                                        "bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        handleAction('view', note);
+                                    }}
+                                >
                                     <div className="p-4">
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -428,7 +484,25 @@ export default function Notes() {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
                             {sharedNotesData.map((note: any) => (
-                                <Card key={note.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                                <Card
+                                    key={note.id}
+                                    className={cn(
+                                        "bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        handleAction('view', note);
+                                    }}
+                                >
                                     <div className="p-4">
                                         <div className="flex items-start justify-between mb-3">
                                             <div className="flex items-center gap-2 flex-1 min-w-0">

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
+import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
 import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, FileDown, Lock, Calendar, Banknote, Handshake } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,7 @@ export default function Opportunities() {
     const [isLoadingKanban, setIsLoadingKanban] = useState(false);
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [dragOverStage, setDragOverStage] = useState<any>(null);
+    const isDraggingRef = useRef(false);
      const [pageInitialState, setPageInitialState] = useState(true);
 
     useEffect(() => {
@@ -128,6 +130,17 @@ export default function Opportunities() {
                 handleToggleStatus(item);
                 break;
         }
+    };
+
+    const canView = hasPermission(permissions, 'view-opportunities');
+
+    const handleRowClick = (opportunity: any, e?: React.MouseEvent) => {
+        if (!canView) return;
+        if (e && (e.metaKey || e.ctrlKey)) {
+            window.open(route('opportunities.show', opportunity.id), '_blank');
+            return;
+        }
+        router.get(route('opportunities.show', opportunity.id));
     };
 
     const handleAddNew = () => {
@@ -281,8 +294,8 @@ export default function Opportunities() {
             render: (value: any, row: any) => (
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="min-w-0">
-                        <div className="font-medium">{row.name}</div>
-                        <div className="text-sm text-muted-foreground">{row.account?.name || t('No account')}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors truncate">{row.name}</div>
+                        <div className="text-sm text-muted-foreground truncate">{row.account?.name || t('No account')}</div>
                     </div>
                 </div>
             )
@@ -542,6 +555,7 @@ export default function Opportunities() {
                             edit: 'edit-opportunities',
                             delete: 'delete-opportunities'
                         }}
+                        onRowClick={canView ? handleRowClick : undefined}
                     />
 
                     {/* Pagination section */}
@@ -659,14 +673,36 @@ export default function Opportunities() {
                                                 draggable={hasPermission(permissions, 'edit-opportunities')}
                                                 onDragStart={(e) => {
                                                     if (!hasPermission(permissions, 'edit-opportunities')) { e.preventDefault(); return; }
+                                                    isDraggingRef.current = true;
                                                     e.dataTransfer.setData('opportunityId', opportunity.id.toString());
                                                     setDraggingId(opportunity.id.toString());
                                                 }}
-                                                onDragEnd={() => { setDraggingId(null); setDragOverStage(null); }}
+                                                onDragEnd={() => {
+                                                    setDraggingId(null);
+                                                    setDragOverStage(null);
+                                                    setTimeout(() => { isDraggingRef.current = false; }, 150);
+                                                }}
                                                 className={hasPermission(permissions, 'edit-opportunities') ? 'cursor-grab active:cursor-grabbing' : ''}
                                                 style={{ opacity: draggingId === opportunity.id.toString() ? 0.4 : 1, transition: 'opacity 0.15s' }}
                                             >
-                                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
+                                                <div
+                                                    className={cn(
+                                                        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200",
+                                                        canView && "cursor-pointer"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        if (isDraggingRef.current) return;
+                                                        const target = e.target as HTMLElement;
+                                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                            return;
+                                                        }
+                                                        const selection = window.getSelection();
+                                                        if (selection && selection.toString().trim().length > 0) {
+                                                            return;
+                                                        }
+                                                        handleRowClick(opportunity, e);
+                                                    }}
+                                                >
                                                     <div className="p-3">
                                                         {/* Top row: avatar + name/account + menu */}
                                                         <div className="flex items-start gap-2.5 mb-2.5">
@@ -674,17 +710,19 @@ export default function Opportunities() {
                                                                 {getInitials(opportunity.name)}
                                                             </div> */}
                                                             <div className="flex-1 min-w-0">
-                                                                <h4
-                                                                    className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate cursor-pointer hover:text-primary transition-colors"
-                                                                    onClick={() => handleAction('view', opportunity)}
-                                                                >
+                                                                <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate hover:text-primary transition-colors">
                                                                     {opportunity.name}
                                                                 </h4>
                                                             </div>
                                                             {(hasPermission(permissions, 'view-opportunities') || hasPermission(permissions, 'edit-opportunities') || hasPermission(permissions, 'delete-opportunities')) && (
                                                                 <DropdownMenu>
                                                                     <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0 text-gray-400 hover:text-gray-600">
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-400 hover:text-gray-600"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        >
                                                                             <MoreHorizontal className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
@@ -789,7 +827,25 @@ export default function Opportunities() {
                     {/* Grid View */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {opportunities?.data?.map((opportunity: any) => (
-                            <Card key={opportunity.id} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow">
+                            <Card
+                                key={opportunity.id}
+                                className={cn(
+                                    "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    handleAction('view', opportunity);
+                                }}
+                            >
                                 <div className="p-6 flex flex-col h-full">
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex items-start space-x-4">
@@ -797,7 +853,15 @@ export default function Opportunities() {
                                                 {getInitials(opportunity.name)}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{opportunity.name}</h3>
+                                                <h3
+                                                    className={cn(
+                                                        "text-lg font-bold text-gray-900 dark:text-white mb-2",
+                                                        canView && "cursor-pointer hover:text-primary transition-colors"
+                                                    )}
+                                                    onClick={() => canView && handleAction('view', opportunity)}
+                                                >
+                                                    {opportunity.name}
+                                                </h3>
                                                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{opportunity.account?.name || t('No account')}</p>
                                                 <div className="flex items-center">
                                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${opportunity.status === 'active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-red-50 text-red-700 ring-red-600/20'}`}>

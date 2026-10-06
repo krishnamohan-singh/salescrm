@@ -17,11 +17,13 @@ import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
+import { cn } from '@/lib/utils';
 
 export default function Contacts() {
     const { t } = useTranslation();
     const { auth, contacts, accounts = [], allAccounts = [], users = [], allUsers = [], canViewAll = false, planLimits, filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-contacts');
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -486,7 +488,25 @@ export default function Contacts() {
                     {/* Grid View */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {contacts?.data?.map((contact: any) => (
-                            <Card key={contact.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
+                            <Card
+                                key={contact.id}
+                                className={cn(
+                                    "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    handleAction('view', contact);
+                                }}
+                            >
                                 <div className="relative p-4 flex flex-col flex-1">
 
                                     {/* Three-dots dropdown — top right */}

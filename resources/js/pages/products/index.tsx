@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
+import { cn } from '@/lib/utils';
 
 // import { ProductBarcode } from '@/components/Barcode';
 
@@ -28,6 +29,7 @@ export default function Products() {
         else if (flash?.warning) toast.warning(t(flash.warning));
     }, [flash]);
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-products');
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -494,7 +496,25 @@ export default function Products() {
                             const stockColor = product.stock_quantity > 10 ? 'bg-emerald-500' : product.stock_quantity > 0 ? 'bg-amber-400' : 'bg-red-500';
 
                             return (
-                                <div key={product.id} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-200 flex flex-col overflow-hidden cursor-pointer" onClick={() => router.visit(route('products.show', product.id))}>
+                                <div
+                                    key={product.id}
+                                    className={cn(
+                                        "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm hover:shadow-lg transition-shadow duration-200 flex flex-col overflow-hidden",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        router.visit(route('products.show', product.id));
+                                    }}
+                                >
 
                                     {/* Image Area */}
                                     <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700" style={{ height: '200px' }} onClick={(e) => { e.stopPropagation(); window.open(imageUrl, '_blank'); }}>

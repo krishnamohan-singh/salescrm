@@ -546,7 +546,21 @@ export default function SalesDayPlansIndex() {
                                         const canReviewThisPlan = canReview && (canViewAll || isCompanyOrAdmin || !isOwner);
                                         const canDeleteThisPlan = canDelete && (canViewAll || isOwner);
                                         return (
-                                            <tr key={plan.id} className="hover:bg-muted/20 transition-colors">
+                                            <tr
+                                                key={plan.id}
+                                                className="hover:bg-muted/20 transition-colors cursor-pointer"
+                                                onClick={(e) => {
+                                                    const target = e.target as HTMLElement;
+                                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                        return;
+                                                    }
+                                                    const selection = window.getSelection();
+                                                    if (selection && selection.toString().trim().length > 0) {
+                                                        return;
+                                                    }
+                                                    router.get(route('sales-day-plans.show', plan.id));
+                                                }}
+                                            >
                                                 <td className="py-3 px-4 font-semibold whitespace-nowrap">
                                                     <Link
                                                         href={route('sales-day-plans.show', plan.id)}
@@ -710,7 +724,21 @@ export default function SalesDayPlansIndex() {
                             const isOwner = plan.user_id === auth?.user?.id;
                             const canEditThisPlan = canEdit || isOwner;
                             return (
-                                <Card key={plan.id} className="shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                                <Card
+                                    key={plan.id}
+                                    className="shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+                                    onClick={(e) => {
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        router.get(route('sales-day-plans.show', plan.id));
+                                    }}
+                                >
                                     <CardContent className="p-4 space-y-3">
                                         <div className="flex items-start justify-between">
                                             <div>

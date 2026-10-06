@@ -13,6 +13,7 @@ import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { capitalize } from '@/utils/helper';
+import { cn } from '@/lib/utils';
 
 export default function Meetings() {
     const { t } = useTranslation();
@@ -24,6 +25,7 @@ export default function Meetings() {
         meetingDates = [], selectedDate: backendDate, selectedMonth, selectedYear,
     } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-meetings');
     const isGoogleCalendarSynced = settings?.googleCalendarEnabled === '1';
 
     // Parse backend selectedDate string → Date object (local, no timezone shift)
@@ -371,7 +373,25 @@ export default function Meetings() {
                                     <p className="text-xs text-muted-foreground">{t('You have no meetings scheduled for')} <span className="font-medium">{formatSelectedDate(selectedDateObj)}</span></p>
                                 </div>
                             ) : (Array.isArray(meetings) ? meetings : meetings?.data ?? []).map((meeting: any) => (
-                                <div key={meeting.id} className="flex items-stretch hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+                                <div
+                                    key={meeting.id}
+                                    className={cn(
+                                        "flex items-stretch hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        handleAction('view', meeting);
+                                    }}
+                                >
                                     {/* Time column */}
                                     <div className="w-16 sm:w-20 shrink-0 flex flex-col items-end justify-start pt-4 pb-4 pe-4 me-4 relative">
                                         <div className="absolute top-3 bottom-3 end-0 w-px bg-gray-300 dark:bg-gray-600" />

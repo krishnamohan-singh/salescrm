@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PageTemplate } from '@/components/page-template';
+import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
 import { Plus, Eye, Edit, Trash2, MoreHorizontal, FileDown, Lock, Calendar, Phone, Globe, Building2, Mail, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -118,6 +119,17 @@ export default function Accounts() {
         }
     };
 
+    const canView = hasPermission(permissions, 'view-accounts');
+
+    const handleRowClick = (account: any, e?: React.MouseEvent) => {
+        if (!canView) return;
+        if (e && (e.metaKey || e.ctrlKey)) {
+            window.open(route('accounts.show', account.id), '_blank');
+            return;
+        }
+        router.get(route('accounts.show', account.id));
+    };
+
     const handleDeleteConfirm = () => {
         toast.loading(t('Deleting account...'));
 
@@ -217,7 +229,7 @@ export default function Accounts() {
                 <div className="flex items-center gap-3">
                     <UserInitials name={row.name} />
                     <div>
-                        <div className="font-medium">{row.name}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors">{row.name}</div>
                         <div className="text-sm text-muted-foreground">{row.email || t('No email')}</div>
                     </div>
                 </div>
@@ -447,6 +459,7 @@ export default function Accounts() {
                             edit: 'edit-accounts',
                             delete: 'delete-accounts'
                         }}
+                        onRowClick={canView ? handleRowClick : undefined}
                     />
 
                     {/* Pagination section */}
@@ -479,7 +492,25 @@ export default function Accounts() {
                     {/* Grid View */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {accounts?.data?.map((account: any) => (
-                            <Card key={account.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
+                            <Card
+                                key={account.id}
+                                className={cn(
+                                    "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    handleAction('view', account);
+                                }}
+                            >
                                 <div className="relative p-4 flex flex-col flex-1">
 
                                     {/* Three-dots dropdown — top right */}
@@ -524,7 +555,15 @@ export default function Accounts() {
                                     <div className="flex items-start gap-3 mb-4 pr-8">
                                         <UserInitials name={account.name} />
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{account.name}</h3>
+                                            <h3
+                                                className={cn(
+                                                    "text-sm font-semibold text-gray-900 dark:text-white truncate",
+                                                    canView && "cursor-pointer hover:text-primary transition-colors"
+                                                )}
+                                                onClick={() => canView && handleAction('view', account)}
+                                            >
+                                                {account.name}
+                                            </h3>
                                             <div className="flex items-center gap-1.5 mt-0.5 mb-1.5">
                                                 <Mail className="h-3 w-3 text-gray-500 shrink-0" />
                                                 <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{account.email || t('No email')}</p>

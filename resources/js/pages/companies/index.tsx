@@ -20,12 +20,14 @@ import { UpgradePlanModal } from '@/components/UpgradePlanModal';
 import { hasPermission } from '@/utils/authorization';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { capitalize, getDisplayUrl } from '@/utils/helper';
+import { cn } from '@/lib/utils';
 import ViewPopup from './view';
 
 export default function Companies() {
     const { t } = useTranslation();
     const { auth, companies, plans, filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-companies');
     const getInitials = useInitials();
 
     // State
@@ -553,7 +555,25 @@ export default function Companies() {
                     {/* Grid View */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {companies?.data?.map((company: any) => (
-                            <Card key={company.id} className="group relative overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300">
+                            <Card
+                                key={company.id}
+                                className={cn(
+                                    "group relative overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300",
+                                    canView && "cursor-pointer"
+                                )}
+                                onClick={(e) => {
+                                    if (!canView) return;
+                                    const target = e.target as HTMLElement;
+                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                        return;
+                                    }
+                                    const selection = window.getSelection();
+                                    if (selection && selection.toString().trim().length > 0) {
+                                        return;
+                                    }
+                                    handleAction('company-info', company);
+                                }}
+                            >
                                 {/* Status Badge */}
                                 <div className="absolute top-4 right-4 z-10">
                                     <div className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${company.status === 'active'

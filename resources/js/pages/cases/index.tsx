@@ -16,12 +16,14 @@ import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 import { useInitials } from '@/hooks/use-initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 export default function Cases() {
     const { t } = useTranslation();
     const getInitials = useInitials();
     const { auth, cases, accounts, allAccounts = [], contacts, users, allUsers = [], filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-cases');
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -557,7 +559,25 @@ export default function Cases() {
                             };
                             const sc = statusConfig[caseItem.status] ?? statusConfig.new;
                             return (
-                                <Card key={caseItem.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col overflow-hidden">
+                                <Card
+                                    key={caseItem.id}
+                                    className={cn(
+                                        "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col overflow-hidden",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        handleAction('view', caseItem);
+                                    }}
+                                >
                                     <div className="relative p-4 flex flex-col flex-1">
 
                                         {/* Dropdown — top right */}

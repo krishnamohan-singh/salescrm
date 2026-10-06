@@ -283,7 +283,21 @@ export default function TargetList() {
                                         </TableRow>
                                     ) : (
                                         targets.data.map((tgt: any) => (
-                                            <TableRow key={tgt.id} className="hover:bg-muted/30">
+                                            <TableRow
+                                                key={tgt.id}
+                                                className="hover:bg-muted/30 cursor-pointer"
+                                                onClick={(e) => {
+                                                    const target = e.target as HTMLElement;
+                                                    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                        return;
+                                                    }
+                                                    const selection = window.getSelection();
+                                                    if (selection && selection.toString().trim().length > 0) {
+                                                        return;
+                                                    }
+                                                    router.get(route('targets.show', tgt.id));
+                                                }}
+                                            >
                                                 <TableCell className="font-medium text-xs">
                                                     <div>
                                                         <Link 

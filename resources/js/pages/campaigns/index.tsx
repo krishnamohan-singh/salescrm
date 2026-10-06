@@ -16,12 +16,14 @@ import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 import TargetLists from '../target-lists';
+import { cn } from '@/lib/utils';
 
 export default function Campaigns() {
     const { t } = useTranslation();
     const getInitials = useInitials();
     const { auth, campaigns, campaignTypes, allCampaignTypes, targetLists, allTargetLists, users, allUsers, filters: pageFilters = {}, flash } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    const canView = hasPermission(permissions, 'view-campaigns');
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
@@ -497,7 +499,25 @@ export default function Campaigns() {
                             };
 
                             return (
-                                <Card key={campaign.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col overflow-hidden">
+                                <Card
+                                    key={campaign.id}
+                                    className={cn(
+                                        "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col overflow-hidden",
+                                        canView && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!canView) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        router.visit(route('campaigns.show', campaign.id));
+                                    }}
+                                >
 
                                     <div className="relative p-4 flex flex-col flex-1">
 

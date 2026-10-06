@@ -20,7 +20,7 @@ import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import * as LucidIcons from 'lucide-react';
 import { hasPermission } from '@/utils/authorization';
 import { TableColumn, TableAction } from '@/types/crud';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
 interface CrudTableProps {
@@ -40,6 +40,7 @@ interface CrudTableProps {
         delete: string;
     };
     showActionsAsIcons?: boolean;
+    onRowClick?: (row: any, e?: React.MouseEvent) => void;
 }
 
 export function CrudTable({
@@ -53,7 +54,8 @@ export function CrudTable({
     onSort,
     statusColors = {},
     permissions,
-    entityPermissions
+    entityPermissions,
+    onRowClick
 }: CrudTableProps) {
     const { t } = useTranslation();
     const renderSortIcon = (column: TableColumn) => {
@@ -73,12 +75,12 @@ export function CrudTable({
         onSort(column.key);
     };
 
-    // Check if any actions have permissions
-    const hasAnyActionPermission = actions.some((action) => {
+    const isActionAllowed = (action: TableAction, row?: any) => {
         const permissionKey =
             action.requiredPermission ||
+            action.permission ||
             (entityPermissions &&
-                (action.action === 'view'
+                ((action.action === 'view' || action.action === 'view-details' || action.action === 'company-info')
                     ? entityPermissions.view
                     : action.action === 'edit'
                         ? entityPermissions.edit
@@ -86,32 +88,25 @@ export function CrudTable({
                             ? entityPermissions.delete
                             : action.permission));
 
-        return !permissionKey || hasPermission(permissions, permissionKey);
-    });
+        if (permissionKey && !hasPermission(permissions, permissionKey)) {
+            return false;
+        }
+
+        if (row && action.condition && !action.condition(row)) {
+            return false;
+        }
+
+        return true;
+    };
+
+    // Check if any actions have permissions
+    const hasAnyActionPermission = actions.some((action) => isActionAllowed(action));
 
     const renderActionButtons = (row: any) => {
         return (
             <div className="flex items-center justify-end space-x-2">
                 {actions.map((action, index) => {
-                    // Skip if user doesn't have permission
-                    const permissionKey = action.requiredPermission || (
-                        entityPermissions && (
-                            action.action === 'view'
-                                ? entityPermissions.view
-                                : action.action === 'edit'
-                                    ? entityPermissions.edit
-                                    : action.action === 'delete'
-                                        ? entityPermissions.delete
-                                        : action.permission
-                        )
-                    );
-
-                    if (permissionKey && !hasPermission(permissions, permissionKey)) {
-                        return null;
-                    }
-
-                    // Skip if condition function returns false
-                    if (action.condition && !action.condition(row)) {
+                    if (!isActionAllowed(action, row)) {
                         return null;
                     }
 
@@ -282,9 +277,50 @@ export function CrudTable({
                 </TableHeader>
                 <TableBody>
                     {data.length > 0 ? (
-                        data.map((row, index) => (
-                            <TableRow key={row.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-b">
-                                <TableCell className="font-medium py-2.5">{from + index}</TableCell>
+                        data.map((row, index) => {
+                            const defaultViewAction = !onRowClick
+                                ? actions.find((a) => (a.action === 'view' || a.action === 'view-details' || a.action === 'company-info') && isActionAllowed(a, row))
+                                : null;
+                            const isRowClickable = Boolean(onRowClick || defaultViewAction);
+
+                            return (
+                                <TableRow
+                                    key={row.id || index}
+                                    className={cn(
+                                        "hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-b transition-colors",
+                                        isRowClickable && "cursor-pointer"
+                                    )}
+                                    onClick={(e) => {
+                                        if (!isRowClickable) return;
+                                        const target = e.target as HTMLElement;
+                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                            return;
+                                        }
+                                        const selection = window.getSelection();
+                                        if (selection && selection.toString().trim().length > 0) {
+                                            return;
+                                        }
+                                        if (onRowClick) {
+                                            onRowClick(row, e);
+                                            return;
+                                        }
+                                        if (defaultViewAction) {
+                                            if (defaultViewAction.href) {
+                                                const href = typeof defaultViewAction.href === 'function'
+                                                    ? defaultViewAction.href(row)
+                                                    : defaultViewAction.href.replace(':id', row.id);
+                                                if (e.metaKey || e.ctrlKey) {
+                                                    window.open(href, '_blank');
+                                                } else {
+                                                    router.visit(href);
+                                                }
+                                            } else if (defaultViewAction.action) {
+                                                onAction(defaultViewAction.action, row);
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <TableCell className="font-medium py-2.5">{from + index}</TableCell>
                                 {columns.map((col) => (
                                     <TableCell
                                         key={col.key}
@@ -296,9 +332,17 @@ export function CrudTable({
                                         {renderCellContent(row, col)}
                                     </TableCell>
                                 ))}
-                                {hasAnyActionPermission && <TableCell className="py-2.5 text-right">{renderActionButtons(row)}</TableCell>}
+                                {hasAnyActionPermission && (
+                                    <TableCell
+                                        className="py-2.5 text-right"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {renderActionButtons(row)}
+                                    </TableCell>
+                                )}
                             </TableRow>
-                        ))
+                        );
+                    })
                     ) : (
                         <TableRow>
                             <TableCell

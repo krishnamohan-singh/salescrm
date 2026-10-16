@@ -314,58 +314,73 @@ class ProductController extends Controller
     public function parseFile(Request $request)
     {
         if (!auth()->user()->can('import-products')) {
-            return redirect()->back()->with('error', __('Permission denied.'));
+            return response()->json(['message' => __('Permission denied.')], 403);
         }
 
         $rules = [
-            'file' => 'required|mimes:csv,txt,xlsx',
+            'file' => 'required|file|max:20480',
         ];
 
         $validator = \Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
-            $messages = $validator->getMessageBag();
-            return redirect()->back()->with('error', $messages->first());
+            return response()->json(['message' => $validator->errors()->first()], 422);
         }
 
-        try {
-            $file = $request->file('file');
+        $file = $request->file('file');
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (!in_array($ext, ['csv', 'txt', 'xlsx', 'xls'])) {
+            return response()->json(['message' => __('The file must be a file of type: csv, txt, xlsx, xls.')], 422);
+        }
 
-            // Read headers and preview data
+        libxml_use_internal_errors(true);
+        try {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getRealPath());
             $worksheet = $spreadsheet->getActiveSheet();
-            $highestColumn = $worksheet->getHighestColumn();
             $highestRow = $worksheet->getHighestRow();
-            $headers = [];
+            $highestColString = $worksheet->getHighestDataColumn();
+            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColString);
 
-            for ($col = 'A'; $col <= $highestColumn; $col++) {
-                $value = $worksheet->getCell($col . '1')->getValue();
-                if ($value) {
-                    $headers[] = (string)$value;
+            $headers = [];
+            $headerColMap = [];
+            for ($col = 1; $col <= $highestColIndex; $col++) {
+                $value = trim((string)$worksheet->getCell([$col, 1])->getValue());
+                if ($value !== '') {
+                    $headers[] = $value;
+                    $headerColMap[$col] = $value;
                 }
             }
 
-            // Get preview data (first 2 rows after header)
+            if (empty($headers)) {
+                return response()->json(['message' => __('No headers found in the uploaded file.')], 422);
+            }
+
+            // Get all rows with data
             $previewData = [];
             for ($row = 2; $row <= $highestRow; $row++) {
                 $rowData = [];
-                $colIndex = 0;
-                for ($col = 'A'; $col <= $highestColumn; $col++) {
-                    if ($colIndex < count($headers)) {
-                        $rowData[$headers[$colIndex]] = (string)$worksheet->getCell($col . $row)->getValue();
+                $hasData = false;
+                foreach ($headerColMap as $col => $headerName) {
+                    $val = (string)$worksheet->getCell([$col, $row])->getValue();
+                    $rowData[$headerName] = $val;
+                    if (trim($val) !== '') {
+                        $hasData = true;
                     }
-                    $colIndex++;
                 }
-                $previewData[] = $rowData;
+                if ($hasData) {
+                    $previewData[] = $rowData;
+                }
             }
-
 
             return response()->json([
                 'excelColumns' => $headers,
                 'previewData' => $previewData
             ]);
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', __('Failed to parse file: :error', ['error' => $e->getMessage()]));
+        } catch (\Throwable $e) {
+            \Log::error('Product parseFile error: ' . $e->getMessage());
+            return response()->json(['message' => __('Failed to parse file: :error', ['error' => $e->getMessage()])], 422);
+        } finally {
+            libxml_clear_errors();
         }
     }
 

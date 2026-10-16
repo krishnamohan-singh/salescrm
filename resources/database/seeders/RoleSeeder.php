@@ -237,6 +237,7 @@ class RoleSeeder extends Seeder
             'toggle-status-leads',
             'import-leads',
             'export-leads',
+            'assign-leads',
 
             // Opportunity Stages
             'manage-opportunity-stages',

@@ -13,6 +13,7 @@ class Lead extends BaseModel
     protected $fillable = [
         'name',
         'email',
+        'alternate_email',
         'phone',
         'company',
         'account_name',
@@ -27,18 +28,26 @@ class Lead extends BaseModel
         'lead_status_id',
         'lead_source_id',
         'created_by',
+        'creator_id',
         'assigned_to',
         'campaign_id',
+        'services',
     ];
 
     protected $casts = [
         'is_converted' => 'boolean',
         'value' => 'decimal:2',
+        'services' => 'array',
     ];
+
+    public static function defaultServices(): array
+    {
+        return config('crm_services.items', []);
+    }
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'creator_id');
     }
 
     public function assignedUser(): BelongsTo

@@ -22,6 +22,7 @@ class AccountExport implements FromCollection, WithHeadings, WithMapping
         return [
             $account->name,
             $account->email,
+            $account->alternate_email,
             $account->phone,
             $account->website,
             $account->accountType?->name,
@@ -46,6 +47,7 @@ class AccountExport implements FromCollection, WithHeadings, WithMapping
         return [
             'Name',
             'Email',
+            'Alternate Email',
             'Phone',
             'Website',
             'Account Type',

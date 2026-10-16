@@ -16,6 +16,9 @@ interface ColumnMappingModalProps {
   importRoute: string;
   data: Record<string, string>[];
   previewData?: Record<string, string>[];
+  assignedTo?: string;
+  assignedUserName?: string;
+  title?: string;
 }
 
 export function ColumnMappingModal({
@@ -25,7 +28,10 @@ export function ColumnMappingModal({
   databaseFields,
   importRoute,
   data,
-  previewData = []
+  previewData = [],
+  assignedTo,
+  assignedUserName,
+  title
 }: ColumnMappingModalProps) {
   const { t } = useTranslation();
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -73,7 +79,8 @@ export function ColumnMappingModal({
     toast.loading(t('Importing...'));
 
     router.post(route(importRoute), {
-      data: mappedData
+      data: mappedData,
+      assigned_to: assignedTo || undefined
     }, {
       preserveState: true,
       onSuccess: (page) => {
@@ -102,8 +109,15 @@ export function ColumnMappingModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()} modal={false}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>{t('Import Customers')}</DialogTitle>
+          <DialogTitle>{title ? `${title} - ${t('Column Mapping')}` : t('Column Mapping')}</DialogTitle>
         </DialogHeader>
+
+        {assignedUserName && (
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-800 rounded-md px-3 py-2 text-xs">
+            <span className="font-semibold">{t('Assigned to Sales User:')}</span>
+            <span>{assignedUserName}</span>
+          </div>
+        )}
 
         <Alert className="bg-amber-50 border-amber-200">
           <Info className="h-4 w-4 text-amber-600" />

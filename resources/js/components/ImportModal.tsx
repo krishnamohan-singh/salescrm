@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Download } from 'lucide-react';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ColumnMappingModal } from './ColumnMappingModal';
 
 interface ImportModalProps {
@@ -19,6 +20,7 @@ interface ImportModalProps {
   samplePath?: string;
   importNotes: string;
   databaseFields: { key: string; required?: boolean }[];
+  users?: { id: number; name: string; email?: string }[];
 }
 
 export function ImportModal({
@@ -29,10 +31,12 @@ export function ImportModal({
   parseRoute,
   samplePath,
   importNotes,
-  databaseFields
+  databaseFields,
+  users
 }: ImportModalProps) {
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
+  const [assignedTo, setAssignedTo] = useState<string>('');
   const [isImporting, setIsImporting] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [excelColumns, setExcelColumns] = useState<string[]>([]);
@@ -67,9 +71,10 @@ export function ImportModal({
         toast.dismiss();
         toast.error(data.message || t('Failed to parse file'));
       }
-    } catch (error) {
+    } catch (error: any) {
       toast.dismiss();
-      toast.error(t('Network error or invalid response'));
+      const serverMsg = error?.response?.data?.message || error?.response?.data?.error;
+      toast.error(serverMsg || t('Network error or invalid response'));
     } finally {
       setIsImporting(false);
     }
@@ -78,6 +83,7 @@ export function ImportModal({
   const handleMappingClose = () => {
     setShowMappingModal(false);
     setFile(null);
+    setAssignedTo('');
     setExcelColumns([]);
     setParsedData([]);
     setPreviewData([]);
@@ -86,6 +92,7 @@ export function ImportModal({
   const handleClose = () => {
     if (!isImporting && !showMappingModal) {
       setFile(null);
+      setAssignedTo('');
       onClose();
     }
   };
@@ -138,6 +145,28 @@ export function ImportModal({
             />
           </div>
 
+          {users && users.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="import_assigned_to">{t('Assign to Sales User')}</Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger id="import_assigned_to" className="w-full">
+                  <SelectValue placeholder={t('Select user to assign (optional)')} />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[9999]">
+                  <SelectItem value="__none__">{t('None (Default to current user / CSV)')}</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id.toString()}>
+                      {u.name} {u.email ? `(${u.email})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t('All successfully imported leads will be assigned to this user.')}
+              </p>
+            </div>
+          )}
+
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <h4 className="text-sm font-medium text-blue-800 mb-2">{t('Import Notes:')}</h4>
             <p className="text-xs text-blue-700">{importNotes}</p>
@@ -161,6 +190,9 @@ export function ImportModal({
       importRoute={importRoute}
       data={parsedData}
       previewData={previewData}
+      assignedTo={assignedTo !== '__none__' ? assignedTo : undefined}
+      assignedUserName={users?.find(u => u.id.toString() === assignedTo)?.name}
+      title={title}
     />
     </>
   );

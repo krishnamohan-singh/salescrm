@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SimpleMultiSelect } from '@/components/simple-multi-select';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/custom-toast';
 
@@ -26,12 +27,13 @@ function SectionTitle({ title, extra }: { title: string; extra?: React.ReactNode
 
 export default function AccountCreate() {
     const { t } = useTranslation();
-    const { accountTypes = [], accountIndustries = [], users = [] } = usePage().props as any;
+    const { accountTypes = [], accountIndustries = [], users = [], availableServices = [] } = usePage().props as any;
 
 
     const { data, setData, setError, clearErrors, post, processing, errors } = useForm({
         name: '',
         email: '',
+        alternate_email: '',
         phone: '',
         website: '',
         account_type_id: '',
@@ -48,6 +50,7 @@ export default function AccountCreate() {
         shipping_country: '',
         assigned_to: '',
         status: 'active',
+        services: [] as string[],
     });
 
     const breadcrumbs = [
@@ -81,11 +84,6 @@ export default function AccountCreate() {
         { name: 'account_type_id', label: t('Account Type') },
         { name: 'account_industry_id', label: t('Industry') },
         { name: 'assigned_to', label: t('Assign To') },
-        { name: 'billing_address', label: t('Street Address') },
-        { name: 'billing_city', label: t('City') },
-        { name: 'billing_state', label: t('State / Province') },
-        { name: 'billing_postal_code', label: t('Postal Code') },
-        { name: 'billing_country', label: t('Country') },
     ];
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -140,6 +138,12 @@ export default function AccountCreate() {
                             <Label htmlFor="email" required>{t('Email')}</Label>
                             <Input id="email" type="email" value={data.email} onChange={(e) => set('email', e.target.value)} className={errors.email ? 'border-red-500' : ''} placeholder={t('e.g. contact@acmecorp.com')} />
                             <FieldError message={errors.email} />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="alternate_email">{t('Alternate Email')}</Label>
+                            <Input id="alternate_email" type="email" value={data.alternate_email} onChange={(e) => set('alternate_email', e.target.value)} className={errors.alternate_email ? 'border-red-500' : ''} placeholder={t('e.g. alternate@acmecorp.com')} />
+                            <FieldError message={errors.alternate_email} />
                         </div>
 
                         <div className="space-y-1.5">
@@ -216,6 +220,20 @@ export default function AccountCreate() {
                             )}
                         </div>
 
+                        <div className="space-y-1.5 md:col-span-2">
+                            <Label>{t('Services')}</Label>
+                            <SimpleMultiSelect
+                                options={availableServices}
+                                selected={data.services || []}
+                                onChange={(selected) => {
+                                    setData('services', selected);
+                                    clearErrors('services');
+                                }}
+                                placeholder={t('Select services (e.g. SEO, Website Development, Social Media, etc.)')}
+                            />
+                            <FieldError message={errors.services} />
+                        </div>
+
                         <div className="space-y-1.5">
                             <Label>{t('Status')}</Label>
                             <Select value={data.status} onValueChange={(v) => set('status', v)}>
@@ -238,31 +256,38 @@ export default function AccountCreate() {
 
                     {/* Billing */}
                     <div>
-                        <SectionTitle title={t('Billing Address')} />
+                        <SectionTitle
+                            title={
+                                <span className="flex items-center gap-2">
+                                    {t('Billing Address')}
+                                    <span className="text-sm font-normal text-gray-400">({t('Optional')})</span>
+                                </span> as any
+                            }
+                        />
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="billing_address" required>{t('Billing Address')}</Label>
+                                <Label htmlFor="billing_address">{t('Billing Address')}</Label>
                                 <Textarea id="billing_address" value={data.billing_address} onChange={(e) => set('billing_address', e.target.value)} className={errors.billing_address ? 'border-red-500' : ''} rows={2} placeholder={t('e.g. 123 Main Street, Suite 100')} />
                                 <FieldError message={errors.billing_address} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="billing_city" required>{t('Billing City')}</Label>
+                                    <Label htmlFor="billing_city">{t('Billing City')}</Label>
                                     <Input id="billing_city" value={data.billing_city} onChange={(e) => set('billing_city', e.target.value)} className={errors.billing_city ? 'border-red-500' : ''} placeholder={t('e.g. New York')} />
                                     <FieldError message={errors.billing_city} />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="billing_state" required>{t('State')}</Label>
+                                    <Label htmlFor="billing_state">{t('State')}</Label>
                                     <Input id="billing_state" value={data.billing_state} onChange={(e) => set('billing_state', e.target.value)} className={errors.billing_state ? 'border-red-500' : ''} placeholder={t('e.g. NY')} />
                                     <FieldError message={errors.billing_state} />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="billing_country" required>{t('Billing Country')}</Label>
+                                    <Label htmlFor="billing_country">{t('Billing Country')}</Label>
                                     <Input id="billing_country" value={data.billing_country} onChange={(e) => set('billing_country', e.target.value)} className={errors.billing_country ? 'border-red-500' : ''} placeholder={t('e.g. United States')} />
                                     <FieldError message={errors.billing_country} />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="billing_postal_code" required>{t('Billing Postal Code')}</Label>
+                                    <Label htmlFor="billing_postal_code">{t('Billing Postal Code')}</Label>
                                     <Input id="billing_postal_code" value={data.billing_postal_code} onChange={(e) => set('billing_postal_code', e.target.value)} className={errors.billing_postal_code ? 'border-red-500' : ''} placeholder={t('e.g. 10001')} />
                                     <FieldError message={errors.billing_postal_code} />
                                 </div>

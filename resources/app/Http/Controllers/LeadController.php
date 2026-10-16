@@ -20,7 +20,7 @@ class LeadController extends Controller
         $canViewAll = hasFullModuleAccess('leads', $user);
 
         $query = Lead::query()
-            ->with(['leadStatus', 'leadSource', 'assignedUser', 'campaign', 'accountIndustry'])
+            ->with(['leadStatus', 'leadSource', 'assignedUser', 'creator', 'campaign', 'accountIndustry'])
             ->where('created_by', createdBy());
 
         // Handle search
@@ -28,6 +28,7 @@ class LeadController extends Controller
             $query->where(function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
                     ->orWhere('email', 'like', '%' . $request->search . '%')
+                    ->orWhere('alternate_email', 'like', '%' . $request->search . '%')
                     ->orWhere('phone', 'like', '%' . $request->search . '%')
                     ->orWhere('company', 'like', '%' . $request->search . '%');
             });
@@ -57,6 +58,16 @@ class LeadController extends Controller
             if ($request->has('assigned_to') && !empty($request->assigned_to) && $request->assigned_to !== 'all') {
                 $query->where('assigned_to', $request->assigned_to);
             }
+        }
+
+        if ($request->has('created_by') && !empty($request->created_by) && $request->created_by !== 'all') {
+            $creatorId = $request->created_by;
+            $query->where(function ($q) use ($creatorId) {
+                $q->where('creator_id', $creatorId)
+                    ->orWhere(function ($sq) use ($creatorId) {
+                        $sq->whereNull('creator_id')->where('created_by', $creatorId);
+                    });
+            });
         }
 
         // Handle sorting
@@ -113,7 +124,7 @@ class LeadController extends Controller
             'allUsers' => $allUsers,
             'canViewAll' => $canViewAll,
             'samplePath' => file_exists(storage_path('uploads/sample/sample-lead.xlsx')) ? route('lead.download.template') : null,
-            'filters' => $request->all(['view', 'search', 'lead_status_id', 'lead_source_id', 'status', 'is_converted', 'assigned_to', 'sort_field', 'sort_direction', 'per_page', 'page']),
+            'filters' => $request->all(['view', 'search', 'lead_status_id', 'lead_source_id', 'status', 'is_converted', 'assigned_to', 'created_by', 'sort_field', 'sort_direction', 'per_page', 'page']),
         ]);
     }
 
@@ -146,6 +157,7 @@ class LeadController extends Controller
             'accountIndustries'     => $accountIndustries,
             'campaigns'             => $campaigns,
             'users'                 => $users,
+            'availableServices'     => Lead::defaultServices(),
             'prefilledLeadStatusId' => $request->get('lead_status_id', ''),
         ]);
     }
@@ -155,6 +167,7 @@ class LeadController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:leads,email,NULL,id,created_by,' . createdBy(),
+            'alternate_email' => 'nullable|email|max:255',
             'phone' => 'required|string|max:255',
             'company' => 'nullable|string|max:255',
             'account_name' => 'nullable|string|max:255',
@@ -169,11 +182,18 @@ class LeadController extends Controller
             'campaign_id' => 'nullable|exists:campaigns,id',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'nullable|exists:users,id',
+            'services' => 'nullable|array',
+            'services.*' => 'string|max:255',
         ]);
 
         $validated['created_by'] = createdBy();
+        $validated['creator_id'] = auth()->id() ?? createdBy();
         $validated['status'] = $validated['status'] ?? 'active';
-        $validated['assigned_to'] = $validated['assigned_to'] ?? auth()->id();
+        if (!empty($validated['assigned_to']) && !auth()->user()->can('assign-leads')) {
+            $validated['assigned_to'] = auth()->id();
+        } else {
+            $validated['assigned_to'] = $validated['assigned_to'] ?? auth()->id();
+        }
 
         $lead = Lead::create($validated);
         if ($lead && !IsDemo()) {
@@ -315,6 +335,7 @@ class LeadController extends Controller
             'accountIndustries' => $accountIndustries,
             'campaigns'         => $campaigns,
             'users'             => $users,
+            'availableServices' => Lead::defaultServices(),
         ]);
     }
 
@@ -328,6 +349,7 @@ class LeadController extends Controller
                 $validated = $request->validate([
                     'name' => 'required|string|max:255',
                     'email' => 'required|email|max:255|unique:leads,email,' . $leadId . ',id,created_by,' . createdBy(),
+                    'alternate_email' => 'nullable|email|max:255',
                     'phone' => 'required|string|max:255',
                     'company' => 'nullable|string|max:255',
                     'account_name' => 'nullable|string|max:255',
@@ -342,8 +364,13 @@ class LeadController extends Controller
                     'campaign_id' => 'nullable|exists:campaigns,id',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'nullable|exists:users,id',
+                    'services' => 'nullable|array',
+                    'services.*' => 'string|max:255',
                 ]);
             try {
+                if (isset($validated['assigned_to']) && $validated['assigned_to'] != $lead->assigned_to && !auth()->user()->can('assign-leads')) {
+                    unset($validated['assigned_to']);
+                }
 
                 $lead->fill($validated);
 
@@ -461,6 +488,7 @@ class LeadController extends Controller
             $leadsQuery->where(function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
                     ->orWhere('email', 'like', '%' . $request->search . '%')
+                    ->orWhere('alternate_email', 'like', '%' . $request->search . '%')
                     ->orWhere('phone', 'like', '%' . $request->search . '%')
                     ->orWhere('company', 'like', '%' . $request->search . '%');
             });
@@ -537,8 +565,10 @@ class LeadController extends Controller
         $account = \App\Models\Account::create([
             'name'                 => $lead->company ?: $lead->name,
             'email'                => $lead->email,
+            'alternate_email'      => $lead->alternate_email,
             'phone'                => $lead->phone,
             'website'              => $validated['website'] ?? $lead->website,
+            'services'             => $lead->services,
             'account_type_id'      => $validated['account_type_id'],
             'account_industry_id'  => $validated['account_industry_id'],
             'billing_address'      => $validated['billing_address'],
@@ -622,58 +652,113 @@ class LeadController extends Controller
     public function parseFile(Request $request)
     {
         if (!auth()->user()->can('import-leads')) {
-            return redirect()->back()->with('error', __('Permission denied.'));
+            return response()->json(['message' => __('Permission denied.')], 403);
         }
 
         $rules = [
-            'file' => 'required|mimes:csv,txt,xlsx',
+            'file' => 'required|file|max:20480',
         ];
 
         $validator = \Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
-            $messages = $validator->getMessageBag();
-            return redirect()->back()->with('error', $messages->first());
+            return response()->json(['message' => $validator->errors()->first()], 422);
         }
 
-        try {
-            $file = $request->file('file');
+        $file = $request->file('file');
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (!in_array($ext, ['csv', 'txt', 'xlsx', 'xls'])) {
+            return response()->json(['message' => __('The file must be a file of type: csv, txt, xlsx, xls.')], 422);
+        }
 
-            // Read headers and preview data
+        libxml_use_internal_errors(true);
+        try {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getRealPath());
             $worksheet = $spreadsheet->getActiveSheet();
-            $highestColumn = $worksheet->getHighestColumn();
             $highestRow = $worksheet->getHighestRow();
-            $headers = [];
+            $highestColString = $worksheet->getHighestDataColumn();
+            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestColString);
 
-            for ($col = 'A'; $col <= $highestColumn; $col++) {
-                $value = $worksheet->getCell($col . '1')->getValue();
-                if ($value) {
+            $headers = [];
+            $headerColMap = [];
+            for ($col = 1; $col <= $highestColIndex; $col++) {
+                $value = trim((string)$worksheet->getCell([$col, 1])->getValue());
+                if ($value !== '') {
                     $headers[] = $value;
+                    $headerColMap[$col] = $value;
                 }
             }
 
-            // Get preview data (first 2 rows after header)
+            if (empty($headers)) {
+                return response()->json(['message' => __('No headers found in the uploaded file.')], 422);
+            }
+
+            // Get all rows with data
             $previewData = [];
             for ($row = 2; $row <= $highestRow; $row++) {
                 $rowData = [];
-                $colIndex = 0;
-                for ($col = 'A'; $col <= $highestColumn; $col++) {
-                    if ($colIndex < count($headers)) {
-                        $rowData[$headers[$colIndex]] = (string)$worksheet->getCell($col . $row)->getValue();
+                $hasData = false;
+                foreach ($headerColMap as $col => $headerName) {
+                    $val = (string)$worksheet->getCell([$col, $row])->getValue();
+                    $rowData[$headerName] = $val;
+                    if (trim($val) !== '') {
+                        $hasData = true;
                     }
-                    $colIndex++;
                 }
-                $previewData[] = $rowData;
+                if ($hasData) {
+                    $previewData[] = $rowData;
+                }
             }
 
             return response()->json([
                 'excelColumns' => $headers,
                 'previewData' => $previewData
             ]);
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', __('Failed to parse file: :error', ['error' => $e->getMessage()]));
+        } catch (\Throwable $e) {
+            \Log::error('Lead parseFile error: ' . $e->getMessage());
+            return response()->json(['message' => __('Failed to parse file: :error', ['error' => $e->getMessage()])], 422);
+        } finally {
+            libxml_clear_errors();
         }
+    }
+
+    public function bulkAssign(Request $request)
+    {
+        if (!auth()->user()->can('assign-leads')) {
+            return redirect()->back()->with('error', __('Permission denied.'));
+        }
+
+        $validated = $request->validate([
+            'lead_ids' => 'required|array|min:1',
+            'lead_ids.*' => 'required|integer|exists:leads,id',
+            'assigned_to' => 'required|integer|exists:users,id',
+        ]);
+
+        $assignedUser = User::find($validated['assigned_to']);
+        if (!$assignedUser) {
+            return redirect()->back()->with('error', __('User not found.'));
+        }
+
+        $leads = Lead::where('created_by', createdBy())
+            ->whereIn('id', $validated['lead_ids'])
+            ->get();
+
+        $updatedCount = 0;
+        foreach ($leads as $lead) {
+            $prevAssigned = $lead->assigned_to;
+            $lead->assigned_to = $validated['assigned_to'];
+            $lead->save();
+
+            if ($prevAssigned != $validated['assigned_to'] && !IsDemo()) {
+                event(new \App\Events\LeadAssigned($lead));
+            }
+            $updatedCount++;
+        }
+
+        return redirect()->back()->with('success', __(':count leads assigned to :name successfully.', [
+            'count' => $updatedCount,
+            'name' => $assignedUser->name
+        ]));
     }
 
     public function fileImport(Request $request)
@@ -684,6 +769,7 @@ class LeadController extends Controller
 
         $rules = [
             'data' => 'required|array',
+            'assigned_to' => 'nullable',
         ];
 
         $validator = \Validator::make($request->all(), $rules);
@@ -695,6 +781,16 @@ class LeadController extends Controller
 
         try {
             $data = $request->data;
+            $assignedTo = $request->input('assigned_to');
+            if (empty($assignedTo) || $assignedTo === '__none__') {
+                $assignedTo = null;
+            } elseif (is_numeric($assignedTo)) {
+                $assignedTo = (int) $assignedTo;
+            }
+
+            if ($assignedTo && !auth()->user()->can('assign-leads')) {
+                return redirect()->back()->with('error', __('Permission denied: You do not have permission to assign leads.'));
+            }
 
             // Create temporary CSV file from data
             $tempFile = storage_path('tmp/import_' . time() . '.csv');
@@ -717,7 +813,7 @@ class LeadController extends Controller
             }
             fclose($handle);
 
-            $import = new LeadImport();
+            $import = new LeadImport($assignedTo);
             Excel::import($import, $tempFile);
 
             // Clean up temp file

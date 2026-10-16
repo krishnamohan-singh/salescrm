@@ -143,6 +143,7 @@ class OpportunityController extends Controller
             'opportunitySources'          => $opportunitySources,
             'users'                       => $users,
             'prefilledOpportunityStageId' => $request->get('opportunity_stage_id', ''),
+            'prefilledAccountId'          => $request->get('account_id', ''),
         ]);
     }
 
@@ -155,9 +156,9 @@ class OpportunityController extends Controller
             'close_date' => 'nullable|date',
             'notes' => 'nullable|string',
             'account_id' => 'required|exists:accounts,id',
-            'contact_id' => 'required|exists:contacts,id',
+            'contact_id' => 'nullable|exists:contacts,id',
             'opportunity_stage_id' => 'required|exists:opportunity_stages,id',
-            'opportunity_source_id' => 'required|exists:opportunity_sources,id',
+            'opportunity_source_id' => 'nullable|exists:opportunity_sources,id',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'required|exists:users,id',
             'products' => 'required|array|min:1',
@@ -323,9 +324,9 @@ class OpportunityController extends Controller
                     'close_date' => 'nullable|date',
                     'notes' => 'nullable|string',
                     'account_id' => 'required|exists:accounts,id',
-                    'contact_id' => 'required|exists:contacts,id',
+                    'contact_id' => 'nullable|exists:contacts,id',
                     'opportunity_stage_id' => 'required|exists:opportunity_stages,id',
-                    'opportunity_source_id' => 'required|exists:opportunity_sources,id',
+                    'opportunity_source_id' => 'nullable|exists:opportunity_sources,id',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'required|exists:users,id',
                     'products' => 'required|array|min:1',

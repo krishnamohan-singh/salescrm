@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, useForm } from '@inertiajs/react';
 import { ArrowLeft, Trash2, Plus, PackagePlus } from 'lucide-react';
@@ -19,13 +20,14 @@ export default function OpportunityCreate() {
         products: productOptions = [],
         users = [],
         prefilledOpportunityStageId = '',
+        prefilledAccountId = '',
     } = usePage().props as any;
 
     const { data, setData, setError, clearErrors, post, processing, errors } = useForm({
         name: '',
         description: '',
         close_date: '',
-        account_id: '',
+        account_id: prefilledAccountId ? String(prefilledAccountId) : '',
         contact_id: '',
         opportunity_stage_id: prefilledOpportunityStageId || '',
         opportunity_source_id: '',
@@ -46,6 +48,23 @@ export default function OpportunityCreate() {
         setData(name as any, value);
         clearErrors(name as any);
     };
+
+    const handleAccountChange = (value: string) => {
+        setData((prev: any) => ({
+            ...prev,
+            account_id: value,
+            contact_id: prev.contact_id && contacts.some((c: any) => String(c.id) === String(prev.contact_id) && String(c.account_id) === String(value))
+                ? prev.contact_id
+                : '',
+        }));
+        clearErrors('account_id' as any);
+        clearErrors('contact_id' as any);
+    };
+
+    const filteredContacts = useMemo(() => {
+        if (!data.account_id) return [];
+        return contacts.filter((c: any) => String(c.account_id) === String(data.account_id));
+    }, [contacts, data.account_id]);
 
     const addProductRow = () => {
         setData('products', [...data.products, { product_id: '', quantity: '1', unit_price: '' }]);
@@ -90,9 +109,7 @@ export default function OpportunityCreate() {
     const requiredFields: { name: keyof typeof data; label: string }[] = [
         { name: 'name', label: t('Opportunity Name') },
         { name: 'account_id', label: t('Account') },
-        { name: 'contact_id', label: t('Contact') },
         { name: 'opportunity_stage_id', label: t('Stage') },
-        { name: 'opportunity_source_id', label: t('Source') },
         { name: 'assigned_to', label: t('Assign To') },
     ];
 
@@ -236,7 +253,7 @@ export default function OpportunityCreate() {
                         <div className="space-y-4 p-6">
                             <div className="space-y-2">
                                 <Label className="text-sm font-medium" required>{t('Account')}</Label>
-                                <Select value={data.account_id} onValueChange={(v) => handleInputChange('account_id', v)}>
+                                <Select value={data.account_id} onValueChange={handleAccountChange}>
                                     <SelectTrigger className={errors.account_id ? 'border-red-500' : ''}>
                                         <SelectValue placeholder={t('Select account')} />
                                     </SelectTrigger>
@@ -251,19 +268,38 @@ export default function OpportunityCreate() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-sm font-medium" required>{t('Contact')}</Label>
-                                <Select value={data.contact_id} onValueChange={(v) => handleInputChange('contact_id', v)}>
+                                <Label className="text-sm font-medium">{t('Contact')}</Label>
+                                <Select
+                                    value={data.contact_id}
+                                    onValueChange={(v) => handleInputChange('contact_id', v)}
+                                    disabled={!data.account_id}
+                                >
                                     <SelectTrigger className={errors.contact_id ? 'border-red-500' : ''}>
-                                        <SelectValue placeholder={t('Select contact')} />
+                                        <SelectValue
+                                            placeholder={
+                                                !data.account_id
+                                                    ? t('Select account first')
+                                                    : filteredContacts.length === 0
+                                                    ? t('No contacts available')
+                                                    : t('Select contact')
+                                            }
+                                        />
                                     </SelectTrigger>
                                     <SelectContent searchable>
-                                        {contacts.map((c: any) => (
+                                        {filteredContacts.map((c: any) => (
                                             <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                                 {errors.contact_id && <p className="text-xs text-red-500">{errors.contact_id}</p>}
-                                {contacts.length === 0 && <p className="text-xs mt-1">{t('Click here to add')} <a href={route('contacts.index')} className="underline font-medium">{t('Contacts')}</a></p>}
+                                {!data.account_id ? (
+                                    <p className="text-xs text-muted-foreground mt-1">{t('Select an account to view related contacts')}</p>
+                                ) : filteredContacts.length === 0 ? (
+                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                        {t('No contacts found for this account.')}{' '}
+                                        <a href={route('contacts.index')} className="underline font-medium">{t('Add Contact')}</a>
+                                    </p>
+                                ) : null}
                             </div>
 
                             <div className="space-y-2">
@@ -283,7 +319,7 @@ export default function OpportunityCreate() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-sm font-medium" required>{t('Source')}</Label>
+                                <Label className="text-sm font-medium">{t('Source')}</Label>
                                 <Select value={data.opportunity_source_id} onValueChange={(v) => handleInputChange('opportunity_source_id', v)}>
                                     <SelectTrigger className={errors.opportunity_source_id ? 'border-red-500' : ''}>
                                         <SelectValue placeholder={t('Select source')} />

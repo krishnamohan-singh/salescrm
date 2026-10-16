@@ -633,26 +633,42 @@ export function SalesManagerDashboardView({
                         </span>
                     </CardHeader>
                     <CardContent className="p-3.5 space-y-2">
-                        {requiresAttention.map((alert: any) => (
-                            <div
-                                key={alert.id}
-                                className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            >
-                                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                    alert.severity === 'danger'
-                                        ? 'bg-red-500'
-                                        : alert.severity === 'warning'
-                                        ? 'bg-amber-500'
-                                        : alert.severity === 'success'
-                                        ? 'bg-emerald-500'
-                                        : 'bg-blue-500'
-                                }`} />
-                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex-1">
-                                    {alert.text}
-                                </span>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            </div>
-                        ))}
+                        {requiresAttention.map((alert: any) => {
+                            const content = (
+                                <>
+                                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                        alert.severity === 'danger'
+                                            ? 'bg-red-500'
+                                            : alert.severity === 'warning'
+                                            ? 'bg-amber-500'
+                                            : alert.severity === 'success'
+                                            ? 'bg-emerald-500'
+                                            : 'bg-blue-500'
+                                    }`} />
+                                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex-1">
+                                        {alert.text}
+                                    </span>
+                                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                </>
+                            );
+
+                            return alert.link ? (
+                                <Link
+                                    key={alert.id}
+                                    href={alert.link}
+                                    className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    {content}
+                                </Link>
+                            ) : (
+                                <div
+                                    key={alert.id}
+                                    className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50"
+                                >
+                                    {content}
+                                </div>
+                            );
+                        })}
                     </CardContent>
                 </Card>
 

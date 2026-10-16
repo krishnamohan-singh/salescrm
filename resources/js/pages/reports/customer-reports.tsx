@@ -6,16 +6,17 @@ import { Users, UserPlus, UserCheck, DollarSign } from 'lucide-react';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { SummaryCards } from '@/components/reports/summary-cards';
 import { ChartCard } from '@/components/reports/chart-card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { formatCurrency } from '@/utils/helper';
 
 export default function CustomerReports() {
   const { t } = useTranslation();
-  const { filters, summary, monthlyData, dailyData, topContacts } = usePage().props as any;
+  const { filters = {}, summary = {}, monthlyData = [], dailyData = [], topContacts = [] } = (usePage().props as any) || {};
   const [chartView, setChartView] = useState<'daily' | 'monthly'>('monthly');
   
-  const chartData = chartView === 'daily' ? dailyData : monthlyData;
+  const chartData = (chartView === 'daily' ? dailyData : monthlyData) || [];
 
   const breadcrumbs = [
     { title: t('Dashboard'), href: route('dashboard') },
@@ -26,25 +27,25 @@ export default function CustomerReports() {
   const summaryCards = [
     {
       title: t('Total Contacts'),
-      value: summary.total_contacts.toLocaleString(),
+      value: (summary?.total_contacts ?? 0).toLocaleString(),
       icon: <Users className="h-6 w-6 text-blue-600" />,
       iconColor: 'bg-blue-100'
     },
     {
       title: t('New Contacts'),
-      value: summary.new_contacts.toLocaleString(),
+      value: (summary?.new_contacts ?? 0).toLocaleString(),
       icon: <UserPlus className="h-6 w-6 text-green-600" />,
       iconColor: 'bg-green-100'
     },
     {
       title: t('Active Contacts'),
-      value: summary.active_contacts.toLocaleString(),
+      value: (summary?.active_contacts ?? 0).toLocaleString(),
       icon: <UserCheck className="h-6 w-6 text-purple-600" />,
       iconColor: 'bg-purple-100'
     },
     {
       title: t('Contact Lifetime Value'),
-      value: <span className="font-mono">{formatCurrency(summary.contact_lifetime_value)}</span>,
+      value: <span className="font-mono">{formatCurrency(summary?.contact_lifetime_value ?? 0)}</span>,
       icon: <DollarSign className="h-6 w-6 text-orange-600" />,
       iconColor: 'bg-orange-100'
     }
@@ -110,19 +111,27 @@ export default function CustomerReports() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {topContacts.map((contact: any, index: number) => (
-                <tr key={index}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {contact.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold font-mono">
-                    {formatCurrency(contact.total_spent)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {contact.order_count}
+              {Array.isArray(topContacts) && topContacts.length > 0 ? (
+                topContacts.map((contact: any, index: number) => (
+                  <tr key={index}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {contact.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold font-mono">
+                      {formatCurrency(contact.total_spent ?? 0)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {contact.order_count ?? 0}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">
+                    {t('No contact records found for the selected period.')}
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

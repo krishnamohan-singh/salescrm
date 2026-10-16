@@ -14,6 +14,7 @@ interface KanbanItem {
   id: number;
   name: string;
   email?: string;
+  alternate_email?: string;
   phone?: string;
   company?: string;
   value?: string;
@@ -81,6 +82,7 @@ export const CommonKanbanBoard: React.FC<CommonKanbanBoardProps> = ({
       const filteredItems = column.leads.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.alternate_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.account?.name?.toLowerCase().includes(searchTerm.toLowerCase())

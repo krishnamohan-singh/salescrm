@@ -13,6 +13,7 @@ interface Lead {
   id: number;
   name: string;
   email: string;
+  alternate_email?: string;
   phone: string;
   company: string;
   value: string;

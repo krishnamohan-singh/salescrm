@@ -10,13 +10,14 @@ import { SidebarProvider } from './contexts/SidebarContext';
 import { BrandProvider } from './contexts/BrandContext';
 import { ModalStackProvider } from './contexts/ModalStackContext';
 import { initializeTheme } from './hooks/use-appearance';
-import { CustomToast } from './components/custom-toast';
+import { CustomToast, toast } from './components/custom-toast';
 import { initializeGlobalSettings } from './utils/globalSettings';
 import { initPerformanceMonitoring, lazyLoadImages } from './utils/performance';
 import { getCookie, isDemoMode } from './utils/cookie-utils';
 import i18n from './i18n'; // Import i18n configuration
 import './utils/axios-config'; // Import axios configuration
 import './utils/routes'; // Import route helper
+import { getCsrfToken, syncCsrfToken, refreshCsrfToken } from './utils/csrf';
 
 // Initialize performance monitoring
 initPerformanceMonitoring();
@@ -54,6 +55,9 @@ createInertiaApp({
         // Make page data globally available for axios interceptor
         try {
             (window as any).page = props.initialPage;
+            if (props.initialPage.props?.csrf_token) {
+                syncCsrfToken(props.initialPage.props.csrf_token as string);
+            }
         } catch (e) {
         }
 
@@ -112,10 +116,15 @@ createInertiaApp({
         // Initial render
         root.render(renderApp(props));
 
-        // Listen for navigation events to update global settings and language
+        // Listen for navigation events to update global settings, language, and CSRF token
         router.on('navigate', (event) => {
             try {
-                // Update global page data on navigation and re-render with new settings
+                // Update global page data and CSRF token on navigation
+                (window as any).page = event.detail.page;
+                if (event.detail.page.props?.csrf_token) {
+                    syncCsrfToken(event.detail.page.props.csrf_token as string);
+                }
+
                 if (event.detail.page.props.globalSettings) {
                     initializeGlobalSettings(event.detail.page.props.globalSettings);
                 }
@@ -146,6 +155,36 @@ createInertiaApp({
             } catch (e) {
             }
         });
+
+        // Always attach fresh X-CSRF-TOKEN to every Inertia request
+        router.on('before', (event) => {
+            const token = getCsrfToken();
+            if (token) {
+                event.detail.visit.headers = {
+                    ...event.detail.visit.headers,
+                    'X-CSRF-TOKEN': token,
+                };
+            }
+        });
+
+        // Intercept 419 Page Expired errors globally so users never see the raw error modal
+        router.on('invalid', (event) => {
+            if (event.detail.response?.status === 419) {
+                event.preventDefault();
+                toast.error(i18n.t('Your session or security token expired. Refreshing page...'));
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        });
+
+        // Periodic background keep-alive ping to keep session active while tab is open
+        if (typeof window !== 'undefined' && !(window as any).__sessionKeepAliveStarted) {
+            (window as any).__sessionKeepAliveStarted = true;
+            setInterval(() => {
+                refreshCsrfToken();
+            }, 10 * 60 * 1000); // every 10 minutes
+        }
     },
     progress: {
         color: '#4B5563',

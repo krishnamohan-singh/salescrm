@@ -7,23 +7,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SimpleMultiSelect } from '@/components/simple-multi-select';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/custom-toast';
+import { hasPermission } from '@/utils/authorization';
 
 export default function LeadEdit() {
     const { t } = useTranslation();
     const {
+        auth,
         lead,
         leadStatuses = [],
         leadSources = [],
         accountIndustries = [],
         campaigns = [],
         users = [],
+        availableServices = [],
     } = usePage().props as any;
+
+    const permissions = auth?.permissions || [];
+    const canAssign = hasPermission(permissions, 'assign-leads');
 
     const { data, setData, setError, clearErrors, put, processing, errors } = useForm({
         name: lead.name || '',
         email: lead.email || '',
+        alternate_email: lead.alternate_email || '',
         phone: lead.phone || '',
         company: lead.company || '',
         account_name: lead.account_name || '',
@@ -38,6 +46,7 @@ export default function LeadEdit() {
         notes: lead.notes || '',
         assigned_to: String(lead.assigned_to || ''),
         status: lead.status || 'active',
+        services: Array.isArray(lead.services) ? lead.services : (typeof lead.services === 'string' ? JSON.parse(lead.services || '[]') : []),
     });
 
     const breadcrumbs = [
@@ -47,7 +56,7 @@ export default function LeadEdit() {
         { title: t('Edit') },
     ];
 
-    const handleInputChange = (name: string, value: string) => {
+    const handleInputChange = (name: string, value: any) => {
         setData(name as any, value);
         clearErrors(name as any);
     };
@@ -147,6 +156,21 @@ export default function LeadEdit() {
                                         placeholder={t('eg. john@example.com')}
                                     />
                                     {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="alternate_email" className="text-sm font-medium">
+                                        {t('Alternate Email')}
+                                    </Label>
+                                    <Input
+                                        id="alternate_email"
+                                        type="email"
+                                        value={data.alternate_email}
+                                        onChange={(e) => handleInputChange('alternate_email', e.target.value)}
+                                        className={errors.alternate_email ? 'border-red-500' : ''}
+                                        placeholder={t('eg. alternate@example.com')}
+                                    />
+                                    {errors.alternate_email && <p className="text-xs text-red-500">{errors.alternate_email}</p>}
                                 </div>
 
                                 <div className="space-y-2">
@@ -272,6 +296,19 @@ export default function LeadEdit() {
                                     )}
                                 </div>
 
+                                <div className="space-y-2 md:col-span-2">
+                                    <Label className="text-sm font-medium">
+                                        {t('Services')}
+                                    </Label>
+                                    <SimpleMultiSelect
+                                        options={availableServices}
+                                        selected={data.services || []}
+                                        onChange={(selected) => handleInputChange('services', selected)}
+                                        placeholder={t('Select services (e.g. SEO, Website Development, Social Media, etc.)')}
+                                    />
+                                    {errors.services && <p className="text-xs text-red-500">{errors.services}</p>}
+                                </div>
+
                                 <div className="space-y-2">
                                     <Label className="text-sm font-medium" required>
                                         {t('Lead Status')}
@@ -359,7 +396,7 @@ export default function LeadEdit() {
                                     <Label className="text-sm font-medium">
                                         {t('Assign To')}
                                     </Label>
-                                    <Select value={data.assigned_to} onValueChange={(value) => handleInputChange('assigned_to', value)}>
+                                    <Select disabled={!canAssign} value={data.assigned_to} onValueChange={(value) => handleInputChange('assigned_to', value)}>
                                         <SelectTrigger className={errors.assigned_to ? 'border-red-500' : ''}>
                                             <SelectValue placeholder={t('Select user')} />
                                         </SelectTrigger>
@@ -370,7 +407,10 @@ export default function LeadEdit() {
                                         </SelectContent>
                                     </Select>
                                     {errors.assigned_to && <p className="text-xs text-red-500">{errors.assigned_to}</p>}
-                                    {users.length === 0 && (
+                                    {!canAssign && (
+                                        <p className="text-xs text-muted-foreground">{t('Only users with assign-leads permission can change assigned user.')}</p>
+                                    )}
+                                    {canAssign && users.length === 0 && (
                                         <p className="text-xs mt-1">
                                             {t('Click here to add')} <a href={route('users.index')} className="underline font-medium">{t('Users')}</a>
                                         </p>

@@ -14,6 +14,7 @@ class Account extends BaseModel
     protected $fillable = [
         'name',
         'email',
+        'alternate_email',
         'phone',
         'billing_address',
         'billing_city',
@@ -31,7 +32,17 @@ class Account extends BaseModel
         'status',
         'created_by',
         'assigned_to',
+        'services',
     ];
+
+    protected $casts = [
+        'services' => 'array',
+    ];
+
+    public static function defaultServices(): array
+    {
+        return config('crm_services.items', []);
+    }
 
     public function creator(): BelongsTo
     {
@@ -66,6 +77,11 @@ class Account extends BaseModel
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class);
+    }
+
+    public function opportunities(): HasMany
+    {
+        return $this->hasMany(Opportunity::class);
     }
 
     public function activities(): HasMany

@@ -145,6 +145,11 @@ use Inertia\Inertia;
 
 
 Route::match(['GET', 'HEAD'], '/', [LandingPageController::class, 'show'])->name('home');
+Route::get('/csrf-token', function () {
+    return response()->json([
+        'csrf_token' => csrf_token(),
+    ]);
+})->name('csrf.token');
 Route::post('/landing-page/contact', [LandingPageController::class, 'submitContact'])->name('landing-page.contact');
 Route::post('/landing-page/subscribe', [LandingPageController::class, 'subscribe'])->name('landing-page.subscribe');
 
@@ -622,6 +627,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('leads/{lead}/toggle-status', [LeadController::class, 'toggleStatus'])->middleware('permission:toggle-status-leads')->name('leads.toggle-status');
             Route::put('leads/{lead}/convert-to-account', [LeadController::class, 'convertToAccount'])->middleware('permission:convert-leads')->name('leads.convert-to-account');
             Route::put('leads/{lead}/convert-to-contact', [LeadController::class, 'convertToContact'])->middleware('permission:convert-leads')->name('leads.convert-to-contact');
+            Route::post('leads/bulk-assign', [LeadController::class, 'bulkAssign'])->middleware('permission:assign-leads')->name('leads.bulk-assign');
 
             Route::post('leads/{lead}/update-field', [LeadController::class, 'updateField'])->middleware('permission:edit-leads')->name('leads.update-field');
             Route::put('leads/{lead}/update-status', [LeadController::class, 'updateStatus'])->middleware('permission:edit-leads')->name('leads.update-status');

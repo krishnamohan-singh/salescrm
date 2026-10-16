@@ -101,7 +101,7 @@ export default function ProjectReports() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ status, percent, total }) => {
+                label={({ status, percent, total }: any) => {
                   const statusLabels: { [key: string]: string } = {
                     'active': t('Active'),
                     'completed': t('Completed'),
@@ -109,7 +109,7 @@ export default function ProjectReports() {
                     'inactive': t('Inactive')
                   };
                   const label = statusLabels[status] || status;
-                  return `${label} ${(percent * 100).toFixed(0)}% (${total})`;
+                  return `${label} ${((percent ?? 0) * 100).toFixed(0)}% (${total ?? 0})`;
                 }}
                 outerRadius={80}
                 fill="#8884d8"

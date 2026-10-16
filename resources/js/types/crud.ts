@@ -16,7 +16,7 @@ export interface EntityConfig {
 
   export interface TableColumn {
     key: string;
-    label: string;
+    label: string | React.ReactNode;
     sortable?: boolean;
     type?: 'text' | 'badge' | 'image' | 'date' | 'currency' | 'boolean' | 'link' | 'custom';
     className?: string;

@@ -231,6 +231,9 @@ export default function Accounts() {
                     <div>
                         <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors">{row.name}</div>
                         <div className="text-sm text-muted-foreground">{row.email || t('No email')}</div>
+                        {row.alternate_email && (
+                            <div className="text-xs text-muted-foreground/70 truncate">{row.alternate_email}</div>
+                        )}
                     </div>
                 </div>
             )
@@ -566,7 +569,12 @@ export default function Accounts() {
                                             </h3>
                                             <div className="flex items-center gap-1.5 mt-0.5 mb-1.5">
                                                 <Mail className="h-3 w-3 text-gray-500 shrink-0" />
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{account.email || t('No email')}</p>
+                                                <div className="truncate">
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{account.email || t('No email')}</p>
+                                                    {account.alternate_email && (
+                                                        <p className="text-[11px] text-gray-500/80 dark:text-gray-400/70 truncate">{account.alternate_email}</p>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
                                                 account.status === 'active'

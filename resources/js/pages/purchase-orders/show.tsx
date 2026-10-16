@@ -361,184 +361,10 @@ export default function PurchaseOrderShow() {
           </CardContent>
         </Card>
 
-        {/* ── Activity Stream ── */}
-        {hasPermission(permissions, 'view-stream') && (
-          <Card className="shadow-sm">
-            <CardHeader className="border-b py-3.5 px-5">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <MessageCircle className="h-5 w-5 me-3 text-muted-foreground" />
-                {t('Activity Stream')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {hasPermission(permissions, 'create-purchase-orders') && (
-                <div className="px-5 pt-4 pb-4 border-b">
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newComment.trim()) {
-                      router.post(route('purchase-orders.comments.store', purchaseOrder.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
-                    }
-                  }}>
-                    <div className="flex items-start gap-3">
-                      <TooltipProvider delayDuration={200}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Avatar className="w-9 h-9 flex-shrink-0 mt-1 cursor-default">
-                              <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
-                              <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
-                            </Avatar>
-                          </TooltipTrigger>
-                          <TooltipContent side="top"><p>{auth?.user?.name || t('Me')}</p></TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
-                        <Textarea
-                          placeholder={t('Write a comment...')}
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          className="border-0 resize-none focus-visible:ring-0 bg-transparent"
-                          rows={2}
-                        />
-                        <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
-                                  <Send className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              )}
-              <div className="max-h-[520px] overflow-y-auto border-t">
-                {streamItems && streamItems.length > 0 ? (
-                  <div className="py-5 px-5">
-                    {streamItems.map((activity: any, index: number) => {
-                      const getActivityBadgeColor = (type: string): string => {
-                        switch (type) {
-                          case 'created':  return 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-400';
-                          case 'updated':  return 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400';
-                          case 'deleted':  return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400';
-                          case 'assigned': return 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400';
-                          case 'comment':  return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-400';
-                          default:         return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-800/40 dark:text-gray-400';
-                        }
-                      };
-                      const badgeCls = getActivityBadgeColor(activity.activity_type);
-                      const isEditing = editingComment === activity.id;
-                      return (
-                        <div key={activity.id || index} className="relative flex gap-3 pb-4">
-                          <div className="flex flex-col items-center flex-shrink-0 w-9">
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Avatar className="w-9 h-9 flex-shrink-0 relative z-10 cursor-default">
-                                    <AvatarImage src={activity.user?.avatar} alt={activity.user?.name || 'U'} />
-                                    <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{getInitials(activity.user?.name || 'U')}</AvatarFallback>
-                                  </Avatar>
-                                </TooltipTrigger>
-                                <TooltipContent side="top"><p>{activity.user?.name || t('System')}</p></TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {index < streamItems.length - 1 && (
-                              <div className="absolute left-[18px] top-9 bottom-0 w-px bg-gray-300 dark:bg-gray-600" />
-                            )}
-                          </div>
-                          <div className={`flex-1 min-w-0 rounded-xl border bg-card shadow-sm overflow-hidden ${isEditing ? 'border-emerald-400 ring-1 ring-emerald-300' : ''}`}>
-                            <div className={`flex items-center justify-between gap-2 px-4 py-2.5 ${isEditing ? 'bg-emerald-50/60' : 'bg-muted/30'} border-b`}>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-foreground">{activity.user?.name || t('System')}</span>
-                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${badgeCls}`}>
-                                  {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">{formatRelativeTime(activity.created_at)}</span>
-                              </div>
-                              {!isEditing && (
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {activity.activity_type === 'comment' && activity.user_id === auth?.user?.id && hasPermission(permissions, 'edit-purchase-orders') && (
-                                    <TooltipProvider delayDuration={200}>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                            onClick={() => { setEditingComment(activity.id); setEditCommentText(activity.description); }}>
-                                            <Edit className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top"><p>{t('Edit')}</p></TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                  {hasPermission(permissions, 'delete-stream') && (
-                                    <TooltipProvider delayDuration={200}>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                            onClick={() => { setCurrentActivity(activity); setIsDeleteModalOpen(true); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top"><p>{t('Delete')}</p></TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="px-4 py-3">
-                              {activity.activity_type === 'comment' ? (
-                                isEditing ? (
-                                  <div className="space-y-3">
-                                    <Textarea
-                                      value={editCommentText}
-                                      onChange={(e) => setEditCommentText(e.target.value)}
-                                      className="w-full resize-none border-emerald-300 focus-visible:ring-emerald-400"
-                                      rows={3}
-                                      autoFocus
-                                    />
-                                    <div className="flex items-center justify-end gap-2">
-                                      <Button size="sm" variant="outline" onClick={() => setEditingComment(null)}>{t('Cancel')}</Button>
-                                      <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => {
-                                        router.put(route('purchase-orders.comments.update-activity', { purchaseOrder: purchaseOrder.id, activity: activity.id }), { comment: editCommentText }, { preserveScroll: true });
-                                        setEditingComment(null);
-                                      }}>{t('Save')}</Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-foreground">{activity.description}</p>
-                                )
-                              ) : activity.description?.includes('into') ? (
-                                <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activity.description }} />
-                              ) : activity.title ? (
-                                <p className="text-sm text-muted-foreground">{activity.title}</p>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">{activity.description}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <MessageCircle className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                    <p className="text-sm">{t('No activities found')}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        </div>{/* end left column */}
+                </div>{/* end left column */}
 
         {/* ── Right Sticky Sidebar ── */}
-        <div className="w-full lg:w-[300px] lg:flex-shrink-0 space-y-4 lg:sticky lg:top-6">
+        <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 space-y-6">
 
           {/* Summary & Actions */}
           <Card className="shadow-sm">
@@ -777,6 +603,181 @@ export default function PurchaseOrderShow() {
               </CardContent>
             </Card>
           )}
+
+          {/* ── Activity Stream ── */}
+        {hasPermission(permissions, 'view-stream') && (
+          <Card className="shadow-sm">
+            <CardHeader className="border-b py-3.5 px-5">
+              <CardTitle className="flex items-center text-lg font-semibold">
+                <MessageCircle className="h-5 w-5 me-3 text-muted-foreground" />
+                {t('Activity Stream')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {hasPermission(permissions, 'create-purchase-orders') && (
+                <div className="px-5 pt-4 pb-4 border-b">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newComment.trim()) {
+                      router.post(route('purchase-orders.comments.store', purchaseOrder.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
+                    }
+                  }}>
+                    <div className="flex items-start gap-3">
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Avatar className="w-9 h-9 flex-shrink-0 mt-1 cursor-default">
+                              <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
+                              <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
+                            </Avatar>
+                          </TooltipTrigger>
+                          <TooltipContent side="top"><p>{auth?.user?.name || t('Me')}</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
+                        <Textarea
+                          placeholder={t('Write a comment...')}
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          className="border-0 resize-none focus-visible:ring-0 bg-transparent"
+                          rows={2}
+                        />
+                        <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
+                                  <Send className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              )}
+              <div className="max-h-[520px] overflow-y-auto border-t">
+                {streamItems && streamItems.length > 0 ? (
+                  <div className="py-5 px-5">
+                    {streamItems.map((activity: any, index: number) => {
+                      const getActivityBadgeColor = (type: string): string => {
+                        switch (type) {
+                          case 'created':  return 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-400';
+                          case 'updated':  return 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400';
+                          case 'deleted':  return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400';
+                          case 'assigned': return 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/30 dark:text-purple-400';
+                          case 'comment':  return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-400';
+                          default:         return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-800/40 dark:text-gray-400';
+                        }
+                      };
+                      const badgeCls = getActivityBadgeColor(activity.activity_type);
+                      const isEditing = editingComment === activity.id;
+                      return (
+                        <div key={activity.id || index} className="relative flex gap-3 pb-4">
+                          <div className="flex flex-col items-center flex-shrink-0 w-9">
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Avatar className="w-9 h-9 flex-shrink-0 relative z-10 cursor-default">
+                                    <AvatarImage src={activity.user?.avatar} alt={activity.user?.name || 'U'} />
+                                    <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">{getInitials(activity.user?.name || 'U')}</AvatarFallback>
+                                  </Avatar>
+                                </TooltipTrigger>
+                                <TooltipContent side="top"><p>{activity.user?.name || t('System')}</p></TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            {index < streamItems.length - 1 && (
+                              <div className="absolute left-[18px] top-9 bottom-0 w-px bg-gray-300 dark:bg-gray-600" />
+                            )}
+                          </div>
+                          <div className={`flex-1 min-w-0 rounded-xl border bg-card shadow-sm overflow-hidden ${isEditing ? 'border-emerald-400 ring-1 ring-emerald-300' : ''}`}>
+                            <div className={`flex items-center justify-between gap-2 px-4 py-2.5 ${isEditing ? 'bg-emerald-50/60' : 'bg-muted/30'} border-b`}>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-foreground">{activity.user?.name || t('System')}</span>
+                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${badgeCls}`}>
+                                  {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">{formatRelativeTime(activity.created_at)}</span>
+                              </div>
+                              {!isEditing && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {activity.activity_type === 'comment' && activity.user_id === auth?.user?.id && hasPermission(permissions, 'edit-purchase-orders') && (
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
+                                            onClick={() => { setEditingComment(activity.id); setEditCommentText(activity.description); }}>
+                                            <Edit className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top"><p>{t('Edit')}</p></TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {hasPermission(permissions, 'delete-stream') && (
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
+                                            onClick={() => { setCurrentActivity(activity); setIsDeleteModalOpen(true); }}>
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top"><p>{t('Delete')}</p></TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="px-4 py-3">
+                              {activity.activity_type === 'comment' ? (
+                                isEditing ? (
+                                  <div className="space-y-3">
+                                    <Textarea
+                                      value={editCommentText}
+                                      onChange={(e) => setEditCommentText(e.target.value)}
+                                      className="w-full resize-none border-emerald-300 focus-visible:ring-emerald-400"
+                                      rows={3}
+                                      autoFocus
+                                    />
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button size="sm" variant="outline" onClick={() => setEditingComment(null)}>{t('Cancel')}</Button>
+                                      <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => {
+                                        router.put(route('purchase-orders.comments.update-activity', { purchaseOrder: purchaseOrder.id, activity: activity.id }), { comment: editCommentText }, { preserveScroll: true });
+                                        setEditingComment(null);
+                                      }}>{t('Save')}</Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-foreground">{activity.description}</p>
+                                )
+                              ) : activity.description?.includes('into') ? (
+                                <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activity.description }} />
+                              ) : activity.title ? (
+                                <p className="text-sm text-muted-foreground">{activity.title}</p>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">{activity.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <MessageCircle className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
+                    <p className="text-sm">{t('No activities found')}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         </div>{/* end right sidebar */}
       </div>{/* end flex */}

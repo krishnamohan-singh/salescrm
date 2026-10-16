@@ -22,7 +22,7 @@ return new class extends Migration
             $table->foreignId('account_id')->constrained('accounts')->onDelete('cascade');
             $table->foreignId('contact_id')->nullable()->constrained('contacts')->onDelete('set null');
             $table->foreignId('opportunity_stage_id')->constrained('opportunity_stages')->onDelete('cascade');
-            $table->foreignId('opportunity_source_id')->constrained('opportunity_sources')->onDelete('cascade');
+            $table->foreignId('opportunity_source_id')->nullable()->constrained('opportunity_sources')->onDelete('set null');
             $table->foreignId('created_by')->constrained('users')->onDelete('cascade');
             $table->foreignId('assigned_to')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamps();

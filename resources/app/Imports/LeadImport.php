@@ -16,27 +16,55 @@ class LeadImport implements ToModel, WithHeadingRow, WithEvents
     private $addedCount = 0;
     private $skippedCount = 0;
     private $leads = [];
+    private $assignedTo = null;
+
+    public function __construct($assignedTo = null)
+    {
+        $this->assignedTo = $assignedTo;
+    }
 
     public function model(array $row)
     {
-        // Skip if both name and email are empty
-        if (empty($row['name']) && empty($row['email'])) {
+        $name = trim((string)($row['name'] ?? ''));
+        $email = trim((string)($row['email'] ?? ''));
+        $phone = trim((string)($row['phone'] ?? ''));
+
+        // Skip if any mandatory field (name, email, phone) is empty
+        if (empty($name) || empty($email) || empty($phone)) {
+            $this->skippedCount++;
             return null;
         }
 
         // Check for duplicate email
-        if (!empty($row['email'])) {
-            $leadByEmail = Lead::where('email', $row['email'])->where('created_by', createdBy())->first();
-            if ($leadByEmail) {
-                $this->skippedCount++;
-                return null;
+        $leadByEmail = Lead::where('email', $email)->where('created_by', createdBy())->first();
+        if ($leadByEmail) {
+            $this->skippedCount++;
+            return null;
+        }
+
+        $rowAssignedTo = null;
+        if (!empty($row['assigned_to'])) {
+            $val = trim((string)$row['assigned_to']);
+            if (is_numeric($val)) {
+                $rowAssignedTo = (int)$val;
+            } else {
+                $matchedUser = User::where('created_by', createdBy())
+                    ->where(function($q) use ($val) {
+                        $q->where('email', $val)->orWhere('name', $val);
+                    })->first();
+                if ($matchedUser) {
+                    $rowAssignedTo = $matchedUser->id;
+                }
             }
         }
 
+        $assignedToId = $this->assignedTo ? (int)$this->assignedTo : ($rowAssignedTo ?: auth()->id());
+
         $leadData = [
-            'name' => $row['name'] ?? '',
-            'email' => $row['email'] ?? '',
-            'phone' => $row['phone'] ?? '',
+            'name' => $name,
+            'email' => $email,
+            'alternate_email' => !empty($row['alternate_email']) ? trim((string)$row['alternate_email']) : (!empty($row['alternate email']) ? trim((string)$row['alternate email']) : null),
+            'phone' => $phone,
             'company' => $row['company'] ?? '',
             'account_name' => $row['account_name'] ?? '',
             'website' => $row['website'] ?? '',
@@ -47,6 +75,8 @@ class LeadImport implements ToModel, WithHeadingRow, WithEvents
             'status' => in_array($row['status'] ?? 'active', ['active', 'inactive']) ? ($row['status'] ?? 'active') : 'active',
             'is_converted' => false,
             'created_by' => createdBy(),
+            'creator_id' => auth()->id() ?? createdBy(),
+            'assigned_to' => $assignedToId,
         ];
 
         // Lead Status
@@ -89,14 +119,18 @@ class LeadImport implements ToModel, WithHeadingRow, WithEvents
         return [
             AfterImport::class => function(AfterImport $event) {
                 // Fire LeadAssigned event for all imported leads
-                Lead::where('created_by', createdBy())
-                ->whereIn('email', $this->leads)
-                ->orderBy('id', 'desc')
-                ->take($this->addedCount)
-                ->get()
-                ->each(function($lead) {
-                        event(new LeadAssigned($lead));
-                    });
+                if (!IsDemo()) {
+                    Lead::where('created_by', createdBy())
+                        ->whereIn('email', $this->leads)
+                        ->orderBy('id', 'desc')
+                        ->take($this->addedCount)
+                        ->get()
+                        ->each(function($lead) {
+                            if ($lead->assigned_to) {
+                                event(new LeadAssigned($lead));
+                            }
+                        });
+                }
             },
         ];
     }

@@ -114,8 +114,11 @@ export default function OpportunityShow() {
                     ))}
                 </div>
 
-                {/* Opportunity Summary + Related Records */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Main Content (Left) + Activity Stream (Right) */}
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                    <div className="flex-1 min-w-0 space-y-6">
+                        {/* Opportunity Summary + Related Records */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Opportunity Summary */}
                     <Card className="shadow-sm">
                         <CardHeader className="border-b py-3.5 px-5">
@@ -557,10 +560,12 @@ export default function OpportunityShow() {
                         </CardContent>
                     </Card>
                 )}
+                    </div>
 
-                {/* Activity Stream */}
-                {hasPermission(permissions, 'view-stream') && (
-                    <Card className="shadow-sm">
+                    {/* Activity Stream */}
+                    {hasPermission(permissions, 'view-stream') && (
+                        <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 space-y-6">
+                            <Card className="shadow-sm">
                         <CardHeader className="border-b py-3.5 px-5">
                             <CardTitle className="flex items-center text-lg font-semibold">
                                 <MessageCircle className="h-5 w-5 mr-3 text-muted-foreground" />
@@ -730,8 +735,10 @@ export default function OpportunityShow() {
                                 )}
                             </div>
                         </CardContent>
-                    </Card>
-                )}
+                            </Card>
+                        </div>
+                    )}
+                </div>
 
 
             </div>

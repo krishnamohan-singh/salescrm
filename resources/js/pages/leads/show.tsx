@@ -3,6 +3,7 @@ import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
 import { ArrowLeft, User, Building, MapPin, FileText, Phone, Mail, Globe, DollarSign, Calendar, Target, UserCheck, MessageCircle, Eye, Trash2, Send, Edit, Check, X, TrendingUp, Clock, Tag, Users, ListTodo, CheckSquare, Plus, Video, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,8 +46,8 @@ export default function LeadShow() {
   const getStatusBadge = (status: string) => {
     return (
       <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${status === 'active'
-          ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
-          : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+        ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
+        : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
         }`}>
         {status === 'active' ? t('Active') : t('Inactive')}
       </span>
@@ -100,205 +101,215 @@ export default function LeadShow() {
           ))}
         </div>
 
-        {/* Lead Summary + Contact & Address */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Lead Summary */}
-          <Card className="shadow-sm">
-            <CardHeader className="border-b py-3.5 px-5">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                {t('Lead Summary')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
-                  <div>{getStatusBadge(lead.status)}</div>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Pipeline Stage')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.lead_status?.name || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Source')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.lead_source?.name || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Conversion')}</p>
-                  <div>
-                    {lead.is_converted
-                      ? <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"><TrendingUp className="h-3 w-3" />{t('Converted')}</span>
-                      : <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-muted text-muted-foreground ring-1 ring-inset ring-border">{t('Not Converted')}</span>}
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Account Name')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.account_name || '—'}</p>
-                </div>
-              </div>
-              {/* Assigned To + Created By — footer */}
-              <div className="pt-4 mt-4 border-t border-border grid grid-cols-2 gap-4">
+        {/* Main Content Layout */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* Left Column: Lead Information, Tasks & Meetings */}
+          <div className="flex-1 min-w-0 space-y-6">
+            {/* Single Unified Box: Lead Details */}
+            <Card className="shadow-sm">
+              <CardHeader className="border-b py-3.5 px-6">
+                <CardTitle className="flex items-center text-lg font-semibold">
+                  <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
+                  {t('Lead Details')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {/* Section 1: Lead Information */}
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
-                  {lead.assigned_user ? (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-7 h-7 flex-shrink-0">
-                        <AvatarImage src={lead.assigned_user.avatar} alt={lead.assigned_user.name} />
-                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(lead.assigned_user.name || '')}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{lead.assigned_user.name}</p>
-                        {lead.assigned_user.email && (
-                          <p className="text-xs text-muted-foreground truncate">{lead.assigned_user.email}</p>
-                        )}
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                    {t('Lead Information')}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
+                      <div>{getStatusBadge(lead.status)}</div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Pipeline Stage')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.lead_status?.name || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Source')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.lead_source?.name || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Conversion')}</p>
+                      <div>
+                        {lead.is_converted
+                          ? <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"><TrendingUp className="h-3 w-3" />{t('Converted')}</span>
+                          : <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-muted text-muted-foreground ring-1 ring-inset ring-border">{t('Not Converted')}</span>}
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Created By')}</p>
-                  {lead.creator ? (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-7 h-7 flex-shrink-0">
-                        <AvatarImage src={lead.creator.avatar} alt={lead.creator.name} />
-                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(lead.creator.name || '')}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{lead.creator.name}</p>
-                        {lead.creator.email && (
-                          <p className="text-xs text-muted-foreground truncate">{lead.creator.email}</p>
-                        )}
-                      </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Account Name')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.account_name || '—'}</p>
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{t('Unknown')}</p>
+                  </div>
+
+                  {/* Assigned To + Created By */}
+                  <div className="pt-4 mt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
+                      {lead.assigned_user ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-7 h-7 flex-shrink-0">
+                            <AvatarImage src={lead.assigned_user.avatar} alt={lead.assigned_user.name} />
+                            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(lead.assigned_user.name || '')}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{lead.assigned_user.name}</p>
+                            {lead.assigned_user.email && (
+                              <p className="text-xs text-muted-foreground truncate">{lead.assigned_user.email}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Created By')}</p>
+                      {lead.creator ? (
+                        <div className="flex items-center gap-2">
+                          <Avatar className="w-7 h-7 flex-shrink-0">
+                            <AvatarImage src={lead.creator.avatar} alt={lead.creator.name} />
+                            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(lead.creator.name || '')}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{lead.creator.name}</p>
+                            {lead.creator.email && (
+                              <p className="text-xs text-muted-foreground truncate">{lead.creator.email}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">{t('Unknown')}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Contact & Address */}
+                <div className="pt-6 border-t border-border">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                    <User className="h-3.5 w-3.5" />
+                    {t('Contact & Address')}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{lead.email || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Alternate Email')}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{lead.alternate_email || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Phone')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.phone || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Company')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.company || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Position')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.position || '—'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Website')}</p>
+                      {lead.website
+                        ? <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:!text-blue-600 hover:underline truncate block">{lead.website}</a>
+                        : <p className="text-sm text-muted-foreground">—</p>}
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Industry')}</p>
+                      <p className="text-sm font-medium text-foreground">{lead.account_industry?.name || '—'}</p>
+                    </div>
+                    <div className="space-y-1.5 col-span-full pt-1">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Services')}</p>
+                      {Array.isArray(lead.services) && lead.services.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {lead.services.map((service: string) => (
+                            <Badge key={service} variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 text-xs py-0.5 px-2">
+                              {service}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">—</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {lead.address && (
+                    <div className="pt-4 mt-4 border-t border-border">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1">
+                        <MapPin className="h-3.5 w-3.5" />{t('Address')}
+                      </p>
+                      <p className="text-sm font-medium text-foreground whitespace-pre-line">{lead.address}</p>
+                    </div>
                   )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Contact & Address */}
-          <Card className="shadow-sm">
-            <CardHeader className="border-b py-3.5 px-5">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <User className="h-5 w-5 mr-3 text-muted-foreground" />
-                {t('Contact & Address')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
-                  <p className="text-sm font-medium text-foreground truncate">{lead.email || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Phone')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.phone || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Company')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.company || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Position')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.position || '—'}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Website')}</p>
-                  {lead.website
-                    ? <a href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:!text-blue-600 hover:underline truncate block">{lead.website}</a>
-                    : <p className="text-sm text-muted-foreground">—</p>}
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-medium text-muted-foreground">{t('Industry')}</p>
-                  <p className="text-sm font-medium text-foreground">{lead.account_industry?.name || '—'}</p>
-                </div>
-                {lead.address && (
-                  <div className="sm:col-span-2 space-y-0.5">
+                {/* Section 3: Notes & Related Campaign */}
+                <div className="pt-6 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Notes */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5" />
+                      {t('Notes')}
+                    </h4>
+                    <div className="p-4 rounded-xl border border-border bg-muted/20 min-h-[110px] max-h-[180px] overflow-y-auto">
+                      {lead.notes ? (
+                        <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{lead.notes}</p>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-4 text-center">
+                          <FileText className="h-6 w-6 text-muted-foreground/30 mb-1" />
+                          <p className="text-xs text-muted-foreground">{t('No notes available')}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-              {lead.address && (
-                // <div className="pt-4 border-t border-border">
-                <div className="pt-4 mt-4 border-t border-border">
-                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />{t('Address')}
-                  </p>
-                  <p className="text-sm font-medium text-foreground whitespace-pre-line">{lead.address}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-        </div>
-
-        {/* Notes + Related Campaign — Additional Information card removed (duplicated Lead Value, Industry, Campaign, Conversion) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="shadow-sm">
-            <CardHeader className="border-b py-3.5 px-5">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                {t('Notes')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="px-5 py-4 max-h-[150px] overflow-y-auto scroll-smooth"
-                style={{ scrollbarGutter: 'stable' }}>
-                {lead.notes ? (
-                  <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{lead.notes}</p>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <FileText className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                    <p className="text-sm text-muted-foreground">{t('No notes available')}</p>
+                  {/* Related Campaign */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <Target className="h-3.5 w-3.5" />
+                      {t('Related Campaign')}
+                    </h4>
+                    <div className="p-4 rounded-xl border border-border bg-muted/20 min-h-[110px] flex items-center">
+                      {lead.campaign ? (
+                        <div className="flex items-center justify-between w-full">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{lead.campaign.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{lead.campaign.campaign_type?.name || t('Campaign')}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{t('Budget')}: <span className="font-mono">{window.appSettings?.formatCurrency(Number(lead.campaign.budget || 0)) || `$${Number(lead.campaign.budget || 0).toFixed(2)}`}</span></p>
+                          </div>
+                          {hasPermission(permissions, 'view-campaigns') && (
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Link href={route('campaigns.show', lead.campaign.id)}>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Eye className="h-4 w-4 text-muted-foreground" /></Button>
+                                  </Link>
+                                </TooltipTrigger>
+                                <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center w-full text-center py-2">
+                          <Target className="h-6 w-6 text-muted-foreground/30 mb-1" />
+                          <p className="text-xs text-muted-foreground">{t('No campaign linked')}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader className="border-b py-3.5 px-5">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <Target className="h-5 w-5 mr-3 text-muted-foreground" />
-                {t('Related Campaign')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <div className="h-[120px] flex items-center">
-              {lead.campaign ? (
-                <div className="flex items-center justify-between p-4  rounded-xl border border-border bg-muted/20 hover:bg-muted/40 transition-colors w-full">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{lead.campaign.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{lead.campaign.campaign_type?.name || t('Campaign')}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{t('Budget')}: <span className="font-mono">{window.appSettings?.formatCurrency(Number(lead.campaign.budget || 0)) || `$${Number(lead.campaign.budget || 0).toFixed(2)}`}</span></p>
-                  </div>
-                  {hasPermission(permissions, 'view-campaigns') && (
-                    <TooltipProvider delayDuration={200}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Link href={route('campaigns.show', lead.campaign.id)}>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><Eye className="h-3.5 w-3.5 text-muted-foreground" /></Button>
-                          </Link>
-                        </TooltipTrigger>
-                        <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center w-full text-center">
-                  <Target className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                  <p className="text-sm text-muted-foreground">{t('No campaign linked')}</p>
-                </div>
-              )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
 
         {/* Related Accounts & Contacts */}
         {(relatedAccounts?.length > 0 || relatedContacts?.length > 0) && (
@@ -555,10 +566,12 @@ export default function LeadShow() {
             </Card>
           );
         })()}
+          </div>{/* End Left Column */}
 
-        {/* Activity Stream - Full Width */}
-        {hasPermission(permissions, 'view-stream') && (
-          <Card className="shadow-sm">
+          {/* Right Column: Activity Stream */}
+          {hasPermission(permissions, 'view-stream') && (
+            <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 space-y-6">
+              <Card className="shadow-sm">
             <CardHeader className="border-b">
               <CardTitle className="flex items-center text-lg font-semibold">
                 <MessageCircle className="h-5 w-5 mr-3 text-muted-foreground" />
@@ -566,56 +579,56 @@ export default function LeadShow() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-                {/* Add Comment Form */}
-                {hasPermission(permissions, 'create-leads') && (
-                  <div className="px-5 pt-4 pb-4 border-b">
-                    <form onSubmit={(e) => {
-                      e.preventDefault();
-                      if (newComment.trim()) {
-                        router.post(route('leads.comments.store', lead.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
-                      }
-                    }}>
-                      <div className="flex items-start gap-3">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Avatar className="w-8 h-8 flex-shrink-0 mt-1">
-                                <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
-                                <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent side="top"><p>{auth?.user?.name || t('User')}</p></TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
-                          <Textarea
-                            placeholder={t('Write a comment...')}
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            className="border-0 resize-none focus-visible:ring-0 bg-transparent"
-                            rows={2}
-                          />
-                          <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
-                            <TooltipProvider delayDuration={200}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
-                                    <Send className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
+              {/* Add Comment Form */}
+              {hasPermission(permissions, 'create-leads') && (
+                <div className="px-5 pt-4 pb-4 border-b">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newComment.trim()) {
+                      router.post(route('leads.comments.store', lead.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
+                    }
+                  }}>
+                    <div className="flex items-start gap-3">
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Avatar className="w-8 h-8 flex-shrink-0 mt-1">
+                              <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
+                              <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
+                            </Avatar>
+                          </TooltipTrigger>
+                          <TooltipContent side="top"><p>{auth?.user?.name || t('User')}</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
+                        <Textarea
+                          placeholder={t('Write a comment...')}
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          className="border-0 resize-none focus-visible:ring-0 bg-transparent"
+                          rows={2}
+                        />
+                        <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
+                                  <Send className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </div>
-                    </form>
-                  </div>
-                )}
-                {/* Stream List */}
-                <div className="max-h-[520px] overflow-y-auto border-t">
-                  {streamItems && streamItems.length > 0 ? (
-                    <div className="py-5 px-5">
+                    </div>
+                  </form>
+                </div>
+              )}
+              {/* Stream List */}
+              <div className="max-h-[520px] overflow-y-auto border-t">
+                {streamItems && streamItems.length > 0 ? (
+                  <div className="py-5 px-5">
                     {streamItems.map((activity: any, index: number) => {
                       const getActivityBadgeColor = (type: string): string => {
                         switch (type) {
@@ -718,9 +731,8 @@ export default function LeadShow() {
                                   <p className="text-sm text-foreground">{activity.description}</p>
                                 )
                               ) : activity.field_changed === 'status' && (activity.description === 'Active' || activity.description === 'Inactive') ? (
-                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-                                  activity.description === 'Active' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-                                }`}>{activity.description}</span>
+                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${activity.description === 'Active' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+                                  }`}>{activity.description}</span>
                               ) : activity.field_changed === 'lead_status_id' || activity.field_changed === 'name' || activity.field_changed === 'assigned_to' || activity.description?.includes('into') ? (
                                 <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activity.description }} />
                               ) : activity.title ? (
@@ -733,19 +745,21 @@ export default function LeadShow() {
                         </div>
                       );
                     })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                      <p className="text-sm">{t('No activities found')}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
+                    <p className="text-sm">{t('No activities found')}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
           </Card>
-        )}
+        </div>
+      )}
+    </div>
 
-      </div>
+  </div>
 
       {/* Delete Activity Modal */}
       <CrudDeleteModal

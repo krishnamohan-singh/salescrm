@@ -420,6 +420,7 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
                 'convert-leads',
                 'import-leads',
                 'export-leads',
+                'assign-leads',
 
                 'manage-contacts',
                 'view-contacts',

@@ -71,6 +71,7 @@ class StaffRoleSeeder extends Seeder
                         'convert-leads',
                         'import-leads',
                         'export-leads',
+                        'assign-leads',
 
                         'manage-contacts',
                         'view-contacts',
@@ -943,6 +944,7 @@ class StaffRoleSeeder extends Seeder
                         'convert-leads',
                         'import-leads',
                         'export-leads',
+                        'assign-leads',
 
                         'manage-contacts',
                         'view-contacts',

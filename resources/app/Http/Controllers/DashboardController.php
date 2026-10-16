@@ -521,44 +521,62 @@ class DashboardController extends Controller
         }
 
         // Priorities (Action items for the salesperson)
+        $overdueRouteParams = ['tab' => 'overdue'];
+        $dueTodayRouteParams = ['tab' => 'today'];
+        $callsRouteParams = ['status' => 'planned'];
+        $meetingsRouteParams = [];
+        $proposalsRouteParams = [];
+
+        if (!$tasksScopeAll && $targetSalespersonId) {
+            $overdueRouteParams['assigned_to'] = $targetSalespersonId;
+            $dueTodayRouteParams['assigned_to'] = $targetSalespersonId;
+        }
+        if (!$callsScopeAll && $targetSalespersonId) {
+            $callsRouteParams['assigned_to'] = $targetSalespersonId;
+        }
+        if (!$meetingsScopeAll && $targetSalespersonId) {
+            $meetingsRouteParams['assigned_to'] = $targetSalespersonId;
+        }
+        if (!$quotesScopeAll && $targetSalespersonId) {
+            $proposalsRouteParams['assigned_to'] = $targetSalespersonId;
+        }
+
         $priorities = [
-            ['id' => 'overdue', 'title' => 'Overdue Follow-ups', 'count' => 0, 'type' => 'danger', 'color' => 'bg-red-500', 'link' => route('leads.index')],
-            ['id' => 'due_today', 'title' => 'Follow-ups Due Today', 'count' => 0, 'type' => 'warning', 'color' => 'bg-amber-500', 'link' => route('leads.index')],
-            ['id' => 'meetings', 'title' => 'Client Meetings', 'count' => 0, 'type' => 'primary', 'color' => 'bg-blue-500', 'link' => route('meetings.index')],
-            ['id' => 'calls', 'title' => 'Calls Pending', 'count' => 0, 'type' => 'primary', 'color' => 'bg-blue-500', 'link' => route('calls.index')],
-            ['id' => 'proposals', 'title' => 'Proposals to Follow-up', 'count' => 0, 'type' => 'warning', 'color' => 'bg-amber-500', 'link' => route('quotes.index')],
+            ['id' => 'overdue', 'title' => 'Overdue Follow-ups', 'count' => 0, 'type' => 'danger', 'color' => 'bg-red-500', 'link' => route('tasks.index', $overdueRouteParams)],
+            ['id' => 'due_today', 'title' => 'Follow-ups Due Today', 'count' => 0, 'type' => 'warning', 'color' => 'bg-amber-500', 'link' => route('tasks.index', $dueTodayRouteParams)],
+            ['id' => 'meetings', 'title' => 'Client Meetings', 'count' => 0, 'type' => 'primary', 'color' => 'bg-blue-500', 'link' => route('meetings.index', $meetingsRouteParams)],
+            ['id' => 'calls', 'title' => 'Calls Pending', 'count' => 0, 'type' => 'primary', 'color' => 'bg-blue-500', 'link' => route('calls.index', $callsRouteParams)],
+            ['id' => 'proposals', 'title' => 'Proposals to Follow-up', 'count' => 0, 'type' => 'warning', 'color' => 'bg-amber-500', 'link' => route('quotes.index', $proposalsRouteParams)],
         ];
 
         try {
             $overdueTasks = 0;
             if (class_exists('\App\Models\Task')) {
-                $q = \App\Models\Task::where('created_by', $companyId)->where('status', '!=', 'completed')->where('due_date', '<', $today);
+                $q = \App\Models\Task::where('created_by', $companyId)->whereNotIn('status', ['completed', 'cancelled'])->whereDate('due_date', '<', $today);
                 if (!$tasksScopeAll) $q->where('assigned_to', $targetSalespersonId);
                 $overdueTasks = $q->count();
             }
 
-            $overdueLeads = 0;
-            if (class_exists('\App\Models\Lead')) {
-                $q = \App\Models\Lead::where('created_by', $companyId)->where('is_converted', false)->whereDate('next_follow_up_date', '<', $today);
-                if (!$leadsScopeAll) $q->where(fn($sq)=>$sq->where('assigned_to', $targetSalespersonId)->orWhere('created_by', $targetSalespersonId));
-                $overdueLeads = $q->count();
+            if (class_exists('\App\Models\LeadTask')) {
+                $q = \App\Models\LeadTask::where('created_by', $companyId)->whereNotIn('status', ['completed', 'cancelled'])->whereDate('due_date', '<', $today);
+                if (!$tasksScopeAll) $q->where('assigned_to', $targetSalespersonId);
+                $overdueTasks += $q->count();
             }
-            $priorities[0]['count'] = $overdueTasks + $overdueLeads;
+            $priorities[0]['count'] = $overdueTasks;
 
             $dueTodayTasks = 0;
             if (class_exists('\App\Models\Task')) {
-                $q = \App\Models\Task::where('created_by', $companyId)->where('status', '!=', 'completed')->whereDate('due_date', $today);
+                $q = \App\Models\Task::where('created_by', $companyId)->whereNotIn('status', ['completed', 'cancelled'])->whereDate('due_date', $today);
                 if (!$tasksScopeAll) $q->where('assigned_to', $targetSalespersonId);
                 $dueTodayTasks = $q->count();
             }
 
-            $dueTodayLeads = 0;
-            if (class_exists('\App\Models\Lead')) {
-                $q = \App\Models\Lead::where('created_by', $companyId)->where('is_converted', false)->whereDate('next_follow_up_date', $today);
-                if (!$leadsScopeAll) $q->where(fn($sq)=>$sq->where('assigned_to', $targetSalespersonId)->orWhere('created_by', $targetSalespersonId));
-                $dueTodayLeads = $q->count();
+            if (class_exists('\App\Models\LeadTask')) {
+                $q = \App\Models\LeadTask::where('created_by', $companyId)->whereNotIn('status', ['completed', 'cancelled'])->whereDate('due_date', $today);
+                if (!$tasksScopeAll) $q->where('assigned_to', $targetSalespersonId);
+                $dueTodayTasks += $q->count();
             }
-            $priorities[1]['count'] = $dueTodayTasks + $dueTodayLeads;
+            $priorities[1]['count'] = $dueTodayTasks;
 
             $meetingsToday = 0;
             if (class_exists('\App\Models\Meeting')) {
@@ -752,8 +770,16 @@ class DashboardController extends Controller
                 }
                 
                 $totalClients = (clone $accountsQuery)->count();
-                $activeClients = (clone $accountsQuery)->whereHas('opportunities', fn($q)=>$q->where('status', 'won'))->count();
-                $prospectClients = (clone $accountsQuery)->whereDoesntHave('opportunities', fn($q)=>$q->where('status', 'won'))->count();
+                $activeClients = (clone $accountsQuery)->where(function($q) {
+                    $q->whereHas('opportunities', fn($sq)=>$sq->where('status', 'won'))
+                      ->orWhereHas('accountType', fn($sq)=>$sq->where('name', 'like', '%client%'));
+                })->count();
+                
+                $prospectClients = (clone $accountsQuery)->where(function($q) {
+                    $q->whereHas('accountType', fn($sq)=>$sq->where('name', 'like', '%prospect%'))
+                      ->orWhereDoesntHave('opportunities');
+                })->whereDoesntHave('opportunities', fn($sq)=>$sq->where('status', 'won'))->count();
+
                 $withOppsClients = (clone $accountsQuery)->whereHas('opportunities', fn($q)=>$q->whereNotIn('status', ['won', 'lost', 'closed']))->count();
                 $renewalDueClients = max(0, $totalClients - $activeClients - $prospectClients);
             }
@@ -1047,16 +1073,16 @@ class DashboardController extends Controller
         // Action Items Requiring Attention
         $requiresAttention = [];
         if (($priorities[0]['count'] ?? 0) > 0) {
-            $requiresAttention[] = ['id' => 1, 'text' => $priorities[0]['count'] . ' overdue follow-ups', 'severity' => 'danger', 'count' => $priorities[0]['count']];
+            $requiresAttention[] = ['id' => 1, 'text' => $priorities[0]['count'] . ' overdue follow-ups', 'severity' => 'danger', 'count' => $priorities[0]['count'], 'link' => $priorities[0]['link']];
         }
         if (($priorities[4]['count'] ?? 0) > 0) {
-            $requiresAttention[] = ['id' => 2, 'text' => $priorities[4]['count'] . ' proposals awaiting client response', 'severity' => 'info', 'count' => $priorities[4]['count']];
+            $requiresAttention[] = ['id' => 2, 'text' => $priorities[4]['count'] . ' proposals awaiting client response', 'severity' => 'info', 'count' => $priorities[4]['count'], 'link' => $priorities[4]['link']];
         }
         if ($myOpportunitiesCount > 0) {
-            $requiresAttention[] = ['id' => 3, 'text' => $myOpportunitiesCount . ' active pipeline opportunities', 'severity' => 'warning', 'count' => $myOpportunitiesCount];
+            $requiresAttention[] = ['id' => 3, 'text' => $myOpportunitiesCount . ' active pipeline opportunities', 'severity' => 'warning', 'count' => $myOpportunitiesCount, 'link' => route('opportunities.index')];
         }
         if (empty($requiresAttention)) {
-            $requiresAttention[] = ['id' => 1, 'text' => 'All follow-ups and pipelines are up to date', 'severity' => 'success', 'count' => 0];
+            $requiresAttention[] = ['id' => 1, 'text' => 'All follow-ups and pipelines are up to date', 'severity' => 'success', 'count' => 0, 'link' => null];
         }
 
         // -------------------------------------------------------------

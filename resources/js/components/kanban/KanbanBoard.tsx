@@ -10,6 +10,7 @@ interface Lead {
   id: number;
   name: string;
   email: string;
+  alternate_email?: string;
   phone: string;
   company: string;
   value: string;
@@ -78,6 +79,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       const filteredLeads = column.leads.filter(lead =>
         lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lead.alternate_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         lead.company?.toLowerCase().includes(searchTerm.toLowerCase())
       );

@@ -11,7 +11,7 @@ class LeadExport implements FromCollection, WithHeadings, WithMapping
 {
     public function collection()
     {
-        $query = Lead::with(['leadStatus', 'leadSource', 'assignedUser', 'campaign', 'accountIndustry'])
+        $query = Lead::with(['leadStatus', 'leadSource', 'assignedUser', 'creator', 'campaign', 'accountIndustry'])
             ->where('created_by', createdBy());
 
         return $query->get();
@@ -22,6 +22,7 @@ class LeadExport implements FromCollection, WithHeadings, WithMapping
         return [
             $lead->name,
             $lead->email,
+            $lead->alternate_email,
             $lead->phone,
             $lead->company,
             $lead->account_name,
@@ -36,6 +37,7 @@ class LeadExport implements FromCollection, WithHeadings, WithMapping
             $lead->leadStatus?->name,
             $lead->leadSource?->name,
             $lead->assignedUser?->name,
+            $lead->creator?->name,
             $lead->campaign?->name,
         ];
     }
@@ -45,6 +47,7 @@ class LeadExport implements FromCollection, WithHeadings, WithMapping
         return [
             'Name',
             'Email',
+            'Alternate Email',
             'Phone',
             'Company',
             'Account Name',
@@ -59,6 +62,7 @@ class LeadExport implements FromCollection, WithHeadings, WithMapping
             'Lead Status',
             'Lead Source',
             'Assigned User',
+            'Created By',
             'Campaign',
         ];
     }

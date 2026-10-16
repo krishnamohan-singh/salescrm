@@ -24,6 +24,7 @@ class AccountController extends Controller
             $query->where(function ($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
                     ->orWhere('email', 'like', '%' . $request->search . '%')
+                    ->orWhere('alternate_email', 'like', '%' . $request->search . '%')
                     ->orWhere('phone', 'like', '%' . $request->search . '%');
             });
         }
@@ -131,6 +132,7 @@ class AccountController extends Controller
             'accountTypes'      => $accountTypes,
             'accountIndustries' => $accountIndustries,
             'users'             => $users,
+            'availableServices' => Account::defaultServices(),
         ]);
     }
 
@@ -150,15 +152,16 @@ class AccountController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:accounts,email,NULL,id,created_by,' . createdBy(),
+            'alternate_email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:255',
             'website' => 'nullable|url|max:255',
             'account_type_id' => 'required|exists:account_types,id',
             'account_industry_id' => 'required|exists:account_industries,id',
-            'billing_address' => 'required|string',
-            'billing_city' => 'required|string|max:255',
-            'billing_state' => 'required|string|max:255',
-            'billing_postal_code' => 'required|string|max:255',
-            'billing_country' => 'required|string|max:255',
+            'billing_address' => 'nullable|string',
+            'billing_city' => 'nullable|string|max:255',
+            'billing_state' => 'nullable|string|max:255',
+            'billing_postal_code' => 'nullable|string|max:255',
+            'billing_country' => 'nullable|string|max:255',
             'shipping_address' => 'nullable|string',
             'shipping_city' => 'nullable|string|max:255',
             'shipping_state' => 'nullable|string|max:255',
@@ -166,6 +169,8 @@ class AccountController extends Controller
             'shipping_country' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'required|exists:users,id',
+            'services' => 'nullable|array',
+            'services.*' => 'string|max:255',
         ]);
 
         $validated['created_by'] = createdBy();
@@ -278,6 +283,7 @@ class AccountController extends Controller
             'accountTypes'      => $accountTypes,
             'accountIndustries' => $accountIndustries,
             'users'             => $users,
+            'availableServices' => Account::defaultServices(),
         ]);
     }
 
@@ -291,15 +297,16 @@ class AccountController extends Controller
               $validated = $request->validate([
                     'name' => 'required|string|max:255',
                     'email' => 'required|email|max:255|unique:accounts,email,' . $accountId . ',id,created_by,' . createdBy(),
+                    'alternate_email' => 'nullable|email|max:255',
                     'phone' => 'nullable|string|max:255',
                     'website' => 'nullable|url|max:255',
                     'account_type_id' => 'required|exists:account_types,id',
                     'account_industry_id' => 'required|exists:account_industries,id',
-                    'billing_address' => 'required|string',
-                    'billing_city' => 'required|string|max:255',
-                    'billing_state' => 'required|string|max:255',
-                    'billing_postal_code' => 'required|string|max:255',
-                    'billing_country' => 'required|string|max:255',
+                    'billing_address' => 'nullable|string',
+                    'billing_city' => 'nullable|string|max:255',
+                    'billing_state' => 'nullable|string|max:255',
+                    'billing_postal_code' => 'nullable|string|max:255',
+                    'billing_country' => 'nullable|string|max:255',
                     'shipping_address' => 'nullable|string',
                     'shipping_city' => 'nullable|string|max:255',
                     'shipping_state' => 'nullable|string|max:255',
@@ -307,6 +314,8 @@ class AccountController extends Controller
                     'shipping_country' => 'nullable|string|max:255',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'required|exists:users,id',
+                    'services' => 'nullable|array',
+                    'services.*' => 'string|max:255',
                 ]);
             try {
                 $account->update($validated);

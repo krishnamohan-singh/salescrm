@@ -286,6 +286,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'convert-leads', 'module' => 'leads', 'label' => 'Convert Leads', 'description' => 'Can convert leads to accounts/contacts'],
             ['name' => 'export-leads', 'module' => 'leads', 'label' => 'Export Leads', 'description' => 'Can export leads'],
             ['name' => 'import-leads', 'module' => 'leads', 'label' => 'Import Leads', 'description' => 'Can import leads'],
+            ['name' => 'assign-leads', 'module' => 'leads', 'label' => 'Assign Leads', 'description' => 'Can assign leads to sales users'],
 
             // Opportunity Stage management
             ['name' => 'manage-opportunity-stages', 'module' => 'opportunity_stages', 'label' => 'Manage Opportunity Stages', 'description' => 'Can manage opportunity stages'],

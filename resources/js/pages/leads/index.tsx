@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import * as LucidIcons from "lucide-react";
 import UserInitials from '@/components/user-initials';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 export default function Leads() {
@@ -42,6 +44,7 @@ export default function Leads() {
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
     const [selectedConverted, setSelectedConverted] = useState(pageFilters.is_converted || 'all');
     const [selectedAssignee, setSelectedAssignee] = useState(pageFilters.assigned_to || 'all');
+    const [selectedCreator, setSelectedCreator] = useState(pageFilters.created_by || 'all');
     const [showFilters, setShowFilters] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
@@ -57,10 +60,58 @@ export default function Leads() {
     const [kanbanDataRef, setKanbanDataRef] = useState<any>(null);
     const [isLoadingKanban, setIsLoadingKanban] = useState(false);
     const [pageInitialState, setPageInitialState] = useState(true);
+    const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
+    const [bulkAssignUserId, setBulkAssignUserId] = useState<string>('');
+    const [isBulkAssigning, setIsBulkAssigning] = useState<boolean>(false);
+
+    const handleToggleSelectLead = (id: number) => {
+        setSelectedLeadIds(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleToggleSelectAll = () => {
+        const pageLeadIds: number[] = (leads?.data || []).map((l: any) => l.id);
+        const isAllPageSelected = pageLeadIds.length > 0 && pageLeadIds.every((id: number) => selectedLeadIds.includes(id));
+        if (isAllPageSelected) {
+            setSelectedLeadIds(prev => prev.filter(id => !pageLeadIds.includes(id)));
+        } else {
+            setSelectedLeadIds(prev => Array.from(new Set([...prev, ...pageLeadIds])));
+        }
+    };
+
+    const handleBulkAssign = () => {
+        if (!bulkAssignUserId || selectedLeadIds.length === 0) return;
+
+        setIsBulkAssigning(true);
+        toast.loading(t('Assigning leads...'));
+
+        router.post(route('leads.bulk-assign'), {
+            lead_ids: selectedLeadIds,
+            assigned_to: parseInt(bulkAssignUserId)
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.dismiss();
+                setSelectedLeadIds([]);
+                setBulkAssignUserId('');
+                setIsBulkAssigning(false);
+                if (activeView === 'kanban') {
+                    loadKanbanData();
+                }
+            },
+            onError: (errors: any) => {
+                toast.dismiss();
+                setIsBulkAssigning(false);
+                const msg = typeof errors === 'string' ? errors : (errors?.message || Object.values(errors)[0] || t('Failed to assign leads'));
+                toast.error(msg as string);
+            }
+        });
+    };
     useEffect(() => {
         if (!pageInitialState) applyFilters();
         setPageInitialState(false);
-    }, [selectedStatus, selectedConverted, selectedAssignee, selectedLeadStatus, selectedLeadSource]);
+    }, [selectedStatus, selectedConverted, selectedAssignee, selectedCreator, selectedLeadStatus, selectedLeadSource]);
 
     const isViewingMyData = selectedAssignee === String(auth?.user?.id);
 
@@ -72,14 +123,14 @@ export default function Leads() {
 
     // Check if any filters are active
     const hasActiveFilters = () => {
-        return searchTerm !== '' || selectedLeadStatus !== 'all' || selectedLeadSource !== 'all' || selectedStatus !== 'all' || selectedConverted !== 'all' || selectedAssignee !== 'all';
+        return searchTerm !== '' || selectedLeadStatus !== 'all' || selectedLeadSource !== 'all' || selectedStatus !== 'all' || selectedConverted !== 'all' || selectedAssignee !== 'all' || selectedCreator !== 'all';
     };
 
     const hasEmptyDropdowns = leadStatuses.length === 0 || leadSources.length === 0 || accountIndustries.length === 0 || campaigns.length === 0 || users.length === 0;
 
     // Count active filters
     const activeFilterCount = () => {
-        return (searchTerm ? 1 : 0) + (selectedLeadStatus !== 'all' ? 1 : 0) + (selectedLeadSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedConverted !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0);
+        return (searchTerm ? 1 : 0) + (selectedLeadStatus !== 'all' ? 1 : 0) + (selectedLeadSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedConverted !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0) + (selectedCreator !== 'all' ? 1 : 0);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -97,6 +148,7 @@ export default function Leads() {
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
             sort_field: pageFilters.sort_field || undefined,
             sort_direction: pageFilters.sort_direction || undefined,
             ...(parseInt(pageFilters.per_page) !== (activeView === 'grid' ? 12 : 10) && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -118,6 +170,7 @@ export default function Leads() {
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
             sort_field: field,
             sort_direction: direction,
             ...(parseInt(pageFilters.per_page) !== (activeView === 'grid' ? 12 : 10) && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -267,6 +320,7 @@ export default function Leads() {
                     const matchesSearch = !searchTerm ||
                         lead.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         lead.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        lead.alternate_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         lead.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         lead.company?.toLowerCase().includes(searchTerm.toLowerCase());
                     const matchesSource = selectedLeadSource === 'all' || lead.lead_source_id?.toString() === selectedLeadSource;
@@ -274,8 +328,10 @@ export default function Leads() {
                     const matchesConverted = selectedConverted === 'all' ||
                         (selectedConverted === '1' && lead.is_converted) ||
                         (selectedConverted === '0' && !lead.is_converted);
+                    const matchesAssignee = selectedAssignee === 'all' || lead.assigned_to?.toString() === selectedAssignee;
+                    const matchesCreator = selectedCreator === 'all' || (lead.creator_id ? lead.creator_id.toString() === selectedCreator : lead.created_by?.toString() === selectedCreator);
 
-                    return matchesStatus && matchesSearch && matchesSource && matchesActiveStatus && matchesConverted;
+                    return matchesStatus && matchesSearch && matchesSource && matchesActiveStatus && matchesConverted && matchesAssignee && matchesCreator;
                 })
             };
         });
@@ -289,7 +345,7 @@ export default function Leads() {
         if (activeView === 'kanban' && leadStatuses.length > 0) {
             loadKanbanData();
         }
-    }, [activeView, leads, searchTerm, selectedLeadSource, selectedStatus, selectedConverted, leadStatuses]);
+    }, [activeView, leads, searchTerm, selectedLeadSource, selectedStatus, selectedConverted, selectedAssignee, selectedCreator, leadStatuses]);
 
     // Define page actions
     const pageActions: any[] = [];
@@ -341,8 +397,34 @@ export default function Leads() {
         { title: t('Leads') }
     ];
 
+    const pageLeadData = leads?.data || [];
+    const isAllPageSelected = pageLeadData.length > 0 && pageLeadData.every((l: any) => selectedLeadIds.includes(l.id));
+    const isSomePageSelected = pageLeadData.length > 0 && pageLeadData.some((l: any) => selectedLeadIds.includes(l.id));
+
     // Define table columns
     const columns = [
+        ...(hasPermission(permissions, 'assign-leads') ? [{
+            key: 'selection',
+            label: (
+                <div className="flex items-center justify-center" onClick={(e: any) => e.stopPropagation()}>
+                    <Checkbox
+                        checked={isAllPageSelected ? true : (isSomePageSelected ? 'indeterminate' : false)}
+                        onCheckedChange={handleToggleSelectAll}
+                        aria-label={t('Select all')}
+                    />
+                </div>
+            ),
+            className: 'w-10 px-2 text-center',
+            render: (_: any, row: any) => (
+                <div className="flex items-center justify-center" onClick={(e: any) => e.stopPropagation()}>
+                    <Checkbox
+                        checked={selectedLeadIds.includes(row.id)}
+                        onCheckedChange={() => handleToggleSelectLead(row.id)}
+                        aria-label={t('Select lead')}
+                    />
+                </div>
+            )
+        }] : []),
         {
             key: 'name',
             label: t('Name'),
@@ -374,6 +456,25 @@ export default function Leads() {
                     </div>
                 </div>
             ) : <span className="text-muted-foreground">{t('Unassigned')}</span>
+        },
+        {
+            key: 'creator',
+            label: t('Created By'),
+            render: (_: any, row: any) => {
+                const creator = row.creator;
+                return creator ? (
+                    <div className="flex items-center gap-2.5">
+                        <Avatar className="h-8 w-8">
+                            <AvatarImage src={creator.avatar} />
+                            <AvatarFallback>{getInitials(creator.name)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <div className="font-medium text-xs">{creator.name}</div>
+                            <div className="text-[11px] text-muted-foreground">{creator.email}</div>
+                        </div>
+                    </div>
+                ) : <span className="text-muted-foreground text-xs">{t('Unknown')}</span>;
+            }
         },
         {
             key: 'value',
@@ -558,6 +659,21 @@ export default function Leads() {
                                     label: user.name
                                 }))
                             ]
+                        },
+                        {
+                            name: 'created_by',
+                            label: t('Created By'),
+                            type: 'select' as const,
+                            searchable: true,
+                            value: selectedCreator,
+                            onChange: setSelectedCreator,
+                            options: [
+                                { value: 'all', label: t('All Users') },
+                                ...allUsers.map((user: any) => ({
+                                    value: user.id.toString(),
+                                    label: user.name
+                                }))
+                            ]
                         }
                     ]}
                     // showFilters={showFilters}
@@ -581,6 +697,7 @@ export default function Leads() {
                             status: selectedStatus !== 'all' ? selectedStatus : undefined,
                             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
                             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                            created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
                             sort_field: pageFilters.sort_field || undefined,
                             sort_direction: pageFilters.sort_direction || undefined,
                             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -731,13 +848,14 @@ export default function Leads() {
                                             >
                                                 <div
                                                     className={cn(
-                                                        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow duration-200",
+                                                        "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all duration-200",
+                                                        selectedLeadIds.includes(lead.id) && "ring-2 ring-primary border-primary bg-primary/[0.03] dark:bg-primary/10",
                                                         canView && "cursor-pointer"
                                                     )}
                                                     onClick={(e) => {
                                                         if (isDraggingRef.current) return;
                                                         const target = e.target as HTMLElement;
-                                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item]')) {
+                                                        if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [data-radix-collection-item], [role="checkbox"]')) {
                                                             return;
                                                         }
                                                         const selection = window.getSelection();
@@ -748,14 +866,29 @@ export default function Leads() {
                                                     }}
                                                 >
                                                     <div className="p-3">
-                                                        {/* Top row: avatar + name/email + menu */}
+                                                        {/* Top row: checkbox + avatar + name/email + menu */}
                                                         <div className="flex items-start gap-2.5 mb-2.5">
+                                                            {hasPermission(permissions, 'assign-leads') && (
+                                                                <div
+                                                                    className="pt-0.5 flex-shrink-0"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={selectedLeadIds.includes(lead.id)}
+                                                                        onCheckedChange={() => handleToggleSelectLead(lead.id)}
+                                                                        aria-label={t('Select lead')}
+                                                                    />
+                                                                </div>
+                                                            )}
                                                             <UserInitials name={lead.name} />
                                                             <div className="flex-1 min-w-0">
                                                                 <h4 className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-tight truncate hover:text-primary transition-colors">
                                                                     {lead.name}
                                                                 </h4>
                                                                 <p className="text-xs text-gray-500 truncate mt-0.5">{lead.email || t('No email')}</p>
+                                                                {lead.alternate_email && (
+                                                                    <p className="text-[11px] text-gray-400 truncate">{lead.alternate_email}</p>
+                                                                )}
                                                             </div>
                                                             {(hasPermission(permissions, 'view-leads') || hasPermission(permissions, 'edit-leads') || hasPermission(permissions, 'convert-leads') || hasPermission(permissions, 'delete-leads')) && (
                                                                 <DropdownMenu>
@@ -1229,25 +1362,75 @@ export default function Leads() {
                 importRoute="lead.import"
                 parseRoute="lead.parse"
                 samplePath={samplePath}
+                users={hasPermission(permissions, 'assign-leads') ? users : undefined}
                 importNotes={t('Ensure that the values entered for Lead Status, Lead Source, Account Industry, Campaign match the existing records in your system.')}
                 databaseFields={[
                     { key: 'name', required: true },
                     { key: 'email', required: true },
-                    { key: 'phone' },
+                    { key: 'phone', required: true },
+                    { key: 'alternate_email' },
                     { key: 'company' },
                     { key: 'account_name' },
                     { key: 'account_industry' },
                     { key: 'website' },
                     { key: 'position' },
                     { key: 'value' },
-                    { key: 'lead_status', required: true },
-                    { key: 'lead_source', required: true },
+                    { key: 'lead_status' },
+                    { key: 'lead_source' },
                     { key: 'address' },
                     { key: 'campaign' },
                     { key: 'notes' },
                     { key: 'status' }
                 ]}
             />
+
+            {/* Floating Bulk Assign Bar */}
+            {selectedLeadIds.length > 0 && hasPermission(permissions, 'assign-leads') && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center flex-wrap sm:flex-nowrap gap-3 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl sm:rounded-full px-5 py-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+                    <div className="flex items-center gap-2 pr-3 border-r border-gray-200 dark:border-gray-700">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                            {selectedLeadIds.length}
+                        </span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                            {selectedLeadIds.length === 1 ? t('lead selected') : t('leads selected')}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <Select value={bulkAssignUserId} onValueChange={setBulkAssignUserId}>
+                            <SelectTrigger className="h-9 w-48 sm:w-56 text-xs rounded-full bg-white dark:bg-gray-800">
+                                <SelectValue placeholder={t('Assign to sales user...')} />
+                            </SelectTrigger>
+                            <SelectContent position="popper" className="z-[9999]">
+                                {users.map((user: any) => (
+                                    <SelectItem key={user.id} value={user.id.toString()}>
+                                        {user.name} {user.email ? `(${user.email})` : ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Button
+                            size="sm"
+                            className="rounded-full px-4 h-9 gap-1.5 shadow-sm"
+                            disabled={!bulkAssignUserId || isBulkAssigning}
+                            onClick={handleBulkAssign}
+                        >
+                            <Users className="h-4 w-4" />
+                            {isBulkAssigning ? t('Assigning...') : t('Assign')}
+                        </Button>
+
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-full h-9 px-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            onClick={() => { setSelectedLeadIds([]); setBulkAssignUserId(''); }}
+                        >
+                            {t('Clear')}
+                        </Button>
+                    </div>
+                </div>
+            )}
 
         </PageTemplate>
     );

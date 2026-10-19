@@ -65,6 +65,8 @@ use App\Http\Controllers\ReceiptOrderController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\LeadIntegrationController;
+use App\Http\Controllers\Api\LeadIntegrationApiController;
 use App\Http\Controllers\LeadTaskController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskStatusController;
@@ -645,6 +647,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('leads/{lead}/comments/{comment}', [LeadCommentController::class, 'update'])->middleware('permission:edit-leads')->name('leads.comments.update');
             Route::put('leads/{lead}/activities/{activity}/comment', [LeadCommentController::class, 'updateActivity'])->middleware('permission:edit-leads')->name('leads.comments.update-activity');
             Route::delete('leads/{lead}/comments/{comment}', [LeadCommentController::class, 'destroy'])->middleware('permission:delete-leads')->name('leads.comments.destroy');
+        });
+
+        // Lead Integrations Hub routes
+        Route::middleware('permission:manage-lead-integrations')->group(function () {
+            Route::get('lead-integrations', [LeadIntegrationController::class, 'index'])->name('lead-integrations.index');
+            Route::put('lead-integrations/{leadIntegration}', [LeadIntegrationController::class, 'update'])->name('lead-integrations.update');
+            Route::post('lead-integrations/{leadIntegration}/regenerate-token', [LeadIntegrationController::class, 'regenerateToken'])->name('lead-integrations.regenerate-token');
+            Route::post('lead-integrations/{leadIntegration}/send-test', [LeadIntegrationController::class, 'sendTestLead'])->name('lead-integrations.send-test');
+            Route::get('lead-integrations/data/logs', [LeadIntegrationController::class, 'getLogs'])->name('lead-integrations.logs');
+            Route::delete('lead-integrations/data/clear-logs', [LeadIntegrationController::class, 'clearLogs'])->name('lead-integrations.clear-logs');
         });
 
         // Universal Tasks & Follow-ups routes
@@ -1289,3 +1301,19 @@ Route::get('/cookie-consent/download', [CookieConsentController::class, 'downloa
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('invoices/preview/{templateId}/{color}', [InvoiceController::class, 'previewTemplate'])->name('invoice.preview');
 });
+
+// --------------------------------------------------------------------------
+// Public Lead Integration Endpoints (Facebook, Google Ads, Webhooks, API)
+// --------------------------------------------------------------------------
+Route::match(['GET', 'POST'], 'api/integrations/facebook/{token}', [LeadIntegrationApiController::class, 'facebookWebhook'])->name('api.integrations.facebook');
+Route::post('api/integrations/google-ads/{token}', [LeadIntegrationApiController::class, 'googleAdsWebhook'])->name('api.integrations.google-ads');
+Route::post('api/integrations/webhook/{token}', [LeadIntegrationApiController::class, 'customWebhook'])->name('api.integrations.webhook');
+
+// REST API for external integrations (Bearer Token or X-API-Key auth)
+Route::prefix('api/v1')->group(function () {
+    Route::post('leads', [LeadIntegrationApiController::class, 'createLead'])->name('api.v1.leads.create');
+    Route::get('leads', [LeadIntegrationApiController::class, 'listLeads'])->name('api.v1.leads.list');
+    Route::get('leads/meta', [LeadIntegrationApiController::class, 'getMetadata'])->name('api.v1.leads.meta');
+    Route::get('leads/{id}', [LeadIntegrationApiController::class, 'getLead'])->name('api.v1.leads.show');
+});
+

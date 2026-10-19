@@ -32,6 +32,9 @@ class Lead extends BaseModel
         'assigned_to',
         'campaign_id',
         'services',
+        'lead_integration_id',
+        'integration_source',
+        'external_lead_id',
     ];
 
     protected $casts = [
@@ -95,5 +98,10 @@ class Lead extends BaseModel
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'lead_id')->with(['assignedUser', 'creator', 'taskStatus', 'taskType', 'taskPriority'])->orderBy('due_date', 'asc');
+    }
+
+    public function leadIntegration(): BelongsTo
+    {
+        return $this->belongsTo(LeadIntegration::class, 'lead_integration_id');
     }
 }

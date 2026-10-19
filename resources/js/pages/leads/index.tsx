@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote, Cable } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -381,6 +381,16 @@ export default function Leads() {
         });
     }
 
+    // Add Lead Integrations button
+    if (hasPermission(permissions, 'manage-lead-integrations') || hasPermission(permissions, 'manage-leads')) {
+        pageActions.push({
+            label: t('Integrations'),
+            icon: <Cable className="h-4 w-4 mr-2" />,
+            variant: 'outline',
+            onClick: () => router.get(route('lead-integrations.index'))
+        });
+    }
+
     // Add the "Add Lead" button if user has permission
     if (hasPermission(permissions, 'create-leads')) {
         pageActions.push({
@@ -434,7 +444,14 @@ export default function Leads() {
                     <div className="flex items-center gap-3">
                         <UserInitials name={row.name} />
                         <div>
-                            <div className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors">{row.name}</div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900 dark:text-gray-100 hover:text-primary transition-colors">{row.name}</span>
+                                {row.integration_source && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 uppercase font-mono">
+                                        {row.integration_source === 'facebook' ? 'Meta' : row.integration_source === 'google_ads' ? 'Google' : row.integration_source}
+                                    </Badge>
+                                )}
+                            </div>
                             <div className="text-sm text-muted-foreground">{row.email || t('No email')}</div>
                         </div>
                     </div>

@@ -144,6 +144,19 @@ export default function LeadShow() {
                       <p className="text-xs font-medium text-muted-foreground">{t('Account Name')}</p>
                       <p className="text-sm font-medium text-foreground">{lead.account_name || '—'}</p>
                     </div>
+                    {lead.integration_source && (
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-medium text-muted-foreground">{t('Integration Channel')}</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-primary/10 text-primary capitalize">
+                            {lead.integration_source === 'facebook' ? 'Facebook Lead Ads' : lead.integration_source === 'google_ads' ? 'Google Ads' : lead.integration_source === 'webhook' ? 'Custom Webhook' : 'REST API'}
+                          </span>
+                          {lead.external_lead_id && (
+                            <span className="text-xs text-muted-foreground font-mono">#{lead.external_lead_id}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Assigned To + Created By */}

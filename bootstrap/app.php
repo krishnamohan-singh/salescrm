@@ -65,6 +65,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'invoices/payment/easebuzz/success',
             'invoices/payment/easebuzz/failure',
             'api/media/batch',
+            'api/integrations/*',
+            'api/v1/*',
             ],
         );
 

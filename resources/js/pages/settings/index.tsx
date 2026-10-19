@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { useEffect, useRef, useState } from 'react';
-import { Settings as SettingsIcon, Building, DollarSign, Users, RefreshCw, Palette, BookOpen, Award, FileText, Mail, Bell, Link2, CreditCard, Calendar, HardDrive, Shield, Bot, Cookie, Search, Webhook, Wallet, MessageSquare, ShoppingBag, Slack } from 'lucide-react';
+import { Settings as SettingsIcon, Building, DollarSign, Users, RefreshCw, Palette, BookOpen, Award, FileText, Mail, Bell, Link2, CreditCard, Calendar, HardDrive, Shield, Bot, Cookie, Search, Webhook, Wallet, MessageSquare, ShoppingBag, Slack, Cable } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import SystemSettings from './components/system-settings';
 import CompanySystemSettings from './components/company-system-settings';
-import { usePage } from '@inertiajs/react';
+import { usePage, router } from '@inertiajs/react';
 
 import CurrencySettings from './components/currency-settings';
 import EmailNotificationSettings from './components/email-notification-settings';
@@ -172,6 +172,14 @@ export default function Settings() {
             permission: 'manage-webhook-settings'
         });
     }
+
+    allSidebarNavItems.push({
+        title: t('Lead Integrations'),
+        href: route('lead-integrations.index'),
+        icon: <Cable className="h-4 w-4 mr-2" />,
+        permission: 'manage-lead-integrations'
+    });
+
     // Filter sidebar items based on user permissions
     const sidebarNavItems = allSidebarNavItems.filter(item => {
         // Check for both role and permission if both exist
@@ -188,8 +196,8 @@ export default function Settings() {
         }
         // For company users, only show specific settings
         if (hasRole(auth.roles, 'company')) {
-            // Only allow system settings, email settings, brand settings, currency settings, webhook settings, email notifications, and settings
-            return ['manage-system-settings', 'manage-email-settings', 'manage-brand-settings', 'manage-currency-settings', 'manage-webhook-settings', 'manage-email-notifications', 'manage-twilio-notifications', 'manage-quotes-settings', 'manage-sales-orders-settings', 'manage-invoices-settings', 'settings'].includes(item.permission);
+            // Only allow system settings, email settings, brand settings, currency settings, webhook settings, email notifications, lead integrations, and settings
+            return ['manage-system-settings', 'manage-email-settings', 'manage-brand-settings', 'manage-currency-settings', 'manage-webhook-settings', 'manage-email-notifications', 'manage-twilio-notifications', 'manage-quotes-settings', 'manage-sales-orders-settings', 'manage-invoices-settings', 'manage-lead-integrations', 'settings'].includes(item.permission);
         }
         return false;
     });
@@ -314,6 +322,10 @@ export default function Settings() {
 
     // Handle navigation click
     const handleNavClick = (href: string) => {
+        if (!href.startsWith('#')) {
+            router.get(href);
+            return;
+        }
         const id = href.replace('#', '');
         const element = document.getElementById(id);
         if (element) {

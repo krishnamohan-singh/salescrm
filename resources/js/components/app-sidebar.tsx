@@ -4,7 +4,7 @@ import { useLayout } from '@/contexts/LayoutContext';
 import { useSidebarSettings } from '@/contexts/SidebarContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { type NavItem } from '@/types';
-import { Folder, LayoutGrid, ShoppingBag, Users, Settings, FileText, Briefcase, Calendar, CreditCard, Ticket, Gift, CalendarDays, Image, Building2, Phone, TrendingUp, Package, Megaphone, DollarSign, Palette, Mail, Activity, NotebookPen, MegaphoneIcon, TicketPercent, Search, X, ListTodo, CheckSquare, CalendarCheck, Target } from 'lucide-react';
+import { Folder, LayoutGrid, ShoppingBag, Users, Settings, FileText, Briefcase, Calendar, CreditCard, Ticket, Gift, CalendarDays, Image, Building2, Phone, TrendingUp, Package, Megaphone, DollarSign, Palette, Mail, Activity, NotebookPen, MegaphoneIcon, TicketPercent, Search, X, ListTodo, CheckSquare, CalendarCheck, Target, Cable } from 'lucide-react';
 import AppLogo from './app-logo';
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +41,12 @@ export function AppSidebar() {
             title: t('Media Library'),
             href: route('media-library'),
             icon: Image,
+            group: t('Management'),
+        },
+        {
+            title: t('Lead Integrations'),
+            href: route('lead-integrations.index'),
+            icon: Cable,
             group: t('Management'),
         },
 
@@ -205,6 +211,9 @@ export function AppSidebar() {
         }
         if (hasPermission(permissions, 'manage-lead-statuses')) {
             leadChildren.push({ title: t('Lead Status'), href: route('lead-statuses.index') });
+        }
+        if (isCompany || hasPermission(permissions, 'manage-lead-integrations') || hasPermission(permissions, 'manage-leads')) {
+            leadChildren.push({ title: t('Lead Integrations'), href: route('lead-integrations.index') });
         }
         if (leadChildren.length > 0) {
             items.push({ title: t('Lead Management'), icon: Users, group: t('CRM'), children: leadChildren });

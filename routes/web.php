@@ -649,8 +649,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('leads/{lead}/comments/{comment}', [LeadCommentController::class, 'destroy'])->middleware('permission:delete-leads')->name('leads.comments.destroy');
         });
 
-        // Lead Integrations Hub routes
-        Route::middleware('permission:manage-lead-integrations')->group(function () {
+        // Lead Integrations Hub routes (authorized in controller for Admins, Superadmins, Companies, and Lead Managers)
+        Route::group([], function () {
             Route::get('lead-integrations', [LeadIntegrationController::class, 'index'])->name('lead-integrations.index');
             Route::put('lead-integrations/{leadIntegration}', [LeadIntegrationController::class, 'update'])->name('lead-integrations.update');
             Route::post('lead-integrations/{leadIntegration}/regenerate-token', [LeadIntegrationController::class, 'regenerateToken'])->name('lead-integrations.regenerate-token');

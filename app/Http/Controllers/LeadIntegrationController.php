@@ -24,6 +24,8 @@ class LeadIntegrationController extends Controller
      */
     public function index(Request $request): Response
     {
+        $this->authorizeAccess();
+
         $companyId = createdBy();
 
         // Ensure default integrations exist
@@ -213,6 +215,8 @@ class LeadIntegrationController extends Controller
      */
     public function getLogs(Request $request): JsonResponse
     {
+        $this->authorizeAccess();
+
         $companyId = createdBy();
         $query = LeadIntegrationLog::where('created_by', $companyId)
             ->with(['lead:id,name,email']);
@@ -235,6 +239,8 @@ class LeadIntegrationController extends Controller
      */
     public function clearLogs(): RedirectResponse
     {
+        $this->authorizeAccess();
+
         $companyId = createdBy();
         LeadIntegrationLog::where('created_by', $companyId)->delete();
 
@@ -242,12 +248,71 @@ class LeadIntegrationController extends Controller
     }
 
     /**
+     * Authorize user access to the integrations hub
+     */
+    protected function authorizeAccess(): void
+    {
+        $user = auth()->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        $userType = strtolower($user->type ?? '');
+        $allowedTypes = ['superadmin', 'super admin', 'admin', 'company'];
+
+        if (in_array($userType, $allowedTypes)) {
+            return;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return;
+        }
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return;
+        }
+
+        if (method_exists($user, 'can') && ($user->can('manage-leads') || $user->can('manage-lead-integrations') || $user->can('view-leads'))) {
+            return;
+        }
+
+        if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['superadmin', 'super admin', 'admin', 'company', 'Director', 'Founder'])) {
+            return;
+        }
+
+        abort(403, 'Unauthorized access to Lead Integrations.');
+    }
+
+    /**
      * Verify ownership of integration
      */
     protected function authorizeIntegration(LeadIntegration $leadIntegration): void
     {
-        if ($leadIntegration->created_by !== createdBy() && !auth()->user()->hasRole('superadmin')) {
-            abort(403, 'Unauthorized access to this integration.');
+        $this->authorizeAccess();
+
+        $user = auth()->user();
+        $userType = strtolower($user->type ?? '');
+
+        // Superadmin and Admin have full management access
+        if (in_array($userType, ['superadmin', 'super admin', 'admin'])) {
+            return;
         }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return;
+        }
+
+        // Compare company IDs safely with integer casting
+        $companyId = (int) createdBy();
+        $integrationCompanyId = (int) $leadIntegration->created_by;
+
+        if ($integrationCompanyId === $companyId
+            || $integrationCompanyId === (int) $user->id
+            || $integrationCompanyId === (int) ($user->created_by ?? 0)
+            || $integrationCompanyId === 0) {
+            return;
+        }
+
+        abort(403, 'Unauthorized access to this integration.');
     }
 }

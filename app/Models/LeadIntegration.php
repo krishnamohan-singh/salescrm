@@ -92,6 +92,15 @@ class LeadIntegration extends BaseModel
      */
     public static function ensureDefaultsForCompany(int $companyId): array
     {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('lead_integrations')) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Auto migrate failed: ' . $e->getMessage());
+                return [];
+            }
+        }
+
         $types = [
             'facebook' => [
                 'name' => 'Facebook Lead Ads',

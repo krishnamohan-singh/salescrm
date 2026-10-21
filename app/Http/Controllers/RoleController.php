@@ -71,7 +71,10 @@ class RoleController extends BaseController
         }
 
         // Get allowed modules - use company config for both company and staff users
-        $allowedModules = config('role-permissions.company');
+        $allowedModules = config('role-permissions.company', []);
+        if (!is_array($allowedModules)) {
+            $allowedModules = [];
+        }
 
         // Filter permissions by allowed modules
         $query = Permission::whereIn('module', $allowedModules);
@@ -108,7 +111,10 @@ class RoleController extends BaseController
         }
 
         // Get allowed modules for current user role
-        $allowedModules = config('role-permissions.' . $userType, config('role-permissions.company'));
+        $allowedModules = config('role-permissions.' . $userType, config('role-permissions.company', []));
+        if (!is_array($allowedModules)) {
+            $allowedModules = [];
+        }
 
         // Build query to get valid permissions
         $query = Permission::whereIn('module', $allowedModules)

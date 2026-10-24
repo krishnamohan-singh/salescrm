@@ -46,7 +46,9 @@ export default function LeadEdit() {
         notes: lead.notes || '',
         assigned_to: String(lead.assigned_to || ''),
         status: lead.status || 'active',
-        services: Array.isArray(lead.services) ? lead.services : (typeof lead.services === 'string' ? JSON.parse(lead.services || '[]') : []),
+        services: Array.isArray(lead.services)
+            ? lead.services.map((s: any) => (typeof s === 'string' ? s : (s?.name || String(s?.id || ''))))
+            : (typeof lead.services === 'string' ? JSON.parse(lead.services || '[]') : []),
     });
 
     const breadcrumbs = [

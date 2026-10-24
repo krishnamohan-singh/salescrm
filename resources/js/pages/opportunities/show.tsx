@@ -1,7 +1,7 @@
 import React from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
-import { ArrowLeft, DollarSign, Calendar, Building, Package, FileText, Trash2, Send, Edit, MessageCircle, TrendingUp, Clock, UserCheck, Phone, Eye, Hash, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, DollarSign, Calendar, Building, Package, FileText, Trash2, Send, Edit, MessageCircle, TrendingUp, Clock, UserCheck, Phone, PhoneCall, Plus, Eye, Hash, ShoppingCart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -15,14 +15,20 @@ import { useInitials } from '@/hooks/use-initials';
 import { formatRelativeTime } from '@/utils/helper';
 import { hasPermission } from '@/utils/authorization';
 import { EntityTasksCard } from '@/components/entity-tasks-card';
+import { EntityServicesCard } from '@/components/entity-services-card';
+import { EntityProductsCard } from '@/components/entity-products-card';
+import { LogCallModal } from '@/components/log-call-modal';
+import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
 
 export default function OpportunityShow() {
     const { t } = useTranslation();
     const getInitials = useInitials();
-    const { opportunity, streamItems, auth, meetings, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [] } = usePage().props as any;
+    const { opportunity, streamItems, auth, meetings, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [], activeServices = [], activeProducts = [] } = usePage().props as any;
     const isCompany = auth?.user?.type === 'company';
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+    const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
     const [currentActivity, setCurrentActivity] = useState<any>(null);
     const [newComment, setNewComment] = useState('');
     const [editingComment, setEditingComment] = useState<number | null>(null);
@@ -79,10 +85,16 @@ export default function OpportunityShow() {
             breadcrumbs={breadcrumbs}
             description={t('Opportunity details and related information')}
             actions={[
+                ...(hasPermission(permissions, 'create-calls') ? [{
+                    label: t('Log Call'),
+                    icon: <PhoneCall className="h-4 w-4 mr-2" />,
+                    variant: 'outline' as const,
+                    onClick: () => setIsLogCallModalOpen(true)
+                }] : []),
                 {
                     label: t('Back'),
                     icon: <ArrowLeft className="h-4 w-4 mr-2" />,
-                    variant: 'outline',
+                    variant: 'outline' as const,
                     onClick: () => router.visit(route('opportunities.index'))
                 }
             ]}
@@ -117,166 +129,186 @@ export default function OpportunityShow() {
                 {/* Main Content (Left) + Activity Stream (Right) */}
                 <div className="flex flex-col lg:flex-row gap-6 items-start">
                     <div className="flex-1 min-w-0 space-y-6">
-                        {/* Opportunity Summary + Related Records */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Opportunity Summary */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Opportunity Summary')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
-                                    <div>{getStatusBadge(opportunity.status)}</div>
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Source')}</p>
-                                    <p className="text-sm font-medium text-foreground">{opportunity.opportunity_source?.name || '—'}</p>
-                                </div>
-                            </div>
-                            <div className="pt-4 mt-4 border-t border-border">
-                                <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
-                                {opportunity.assigned_user ? (
-                                    <div className="flex items-center gap-2">
-                                        <Avatar className="w-7 h-7 flex-shrink-0">
-                                            <AvatarImage src={opportunity.assigned_user.avatar} alt={opportunity.assigned_user.name} />
-                                            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(opportunity.assigned_user.name || '')}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{opportunity.assigned_user.name}</p>
-                                            {opportunity.assigned_user.email && (
-                                                <p className="text-xs text-muted-foreground truncate">{opportunity.assigned_user.email}</p>
+                        {/* Unified Card: Opportunity Details */}
+                        <Card className="shadow-sm">
+                            <CardHeader className="border-b py-3.5 px-6">
+                                <CardTitle className="flex items-center text-lg font-semibold">
+                                    <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
+                                    {t('Opportunity Details')}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 space-y-6">
+                                {/* Section 1: Opportunity Information */}
+                                <div>
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                                        {t('Opportunity Information')}
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
+                                            <div>{getStatusBadge(opportunity.status)}</div>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Stage')}</p>
+                                            <p className="text-sm font-medium text-foreground">{opportunity.opportunity_stage?.name || '—'}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Amount')}</p>
+                                            <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">{formatCurrency(opportunity.amount)}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Source')}</p>
+                                            <p className="text-sm font-medium text-foreground">{opportunity.opportunity_source?.name || '—'}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Close Date')}</p>
+                                            <p className="text-sm font-medium text-foreground">{formatDate(opportunity.close_date)}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Probability')}</p>
+                                            <p className="text-sm font-medium text-foreground">{opportunity.probability !== null && opportunity.probability !== undefined ? `${opportunity.probability}%` : '—'}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Assigned To & Created By */}
+                                    <div className="pt-4 mt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
+                                            {opportunity.assigned_user ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-7 h-7 flex-shrink-0">
+                                                        <AvatarImage src={opportunity.assigned_user.avatar} alt={opportunity.assigned_user.name} />
+                                                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(opportunity.assigned_user.name || '')}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium text-foreground truncate">{opportunity.assigned_user.name}</p>
+                                                        {opportunity.assigned_user.email && (
+                                                            <p className="text-xs text-muted-foreground truncate">{opportunity.assigned_user.email}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Created By')}</p>
+                                            {opportunity.creator ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-7 h-7 flex-shrink-0">
+                                                        <AvatarImage src={opportunity.creator.avatar} alt={opportunity.creator.name} />
+                                                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(opportunity.creator.name || '')}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium text-foreground truncate">{opportunity.creator.name}</p>
+                                                        {opportunity.creator.email && (
+                                                            <p className="text-xs text-muted-foreground truncate">{opportunity.creator.email}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">{t('System')}</p>
                                             )}
                                         </div>
                                     </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
+                                </div>
+
+                                {/* Section 2: Related Records */}
+                                <div className="pt-6 border-t border-border">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                                        <Building className="h-3.5 w-3.5" />
+                                        {t('Related Records')}
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {/* Account */}
+                                        {opportunity.account ? (
+                                            <div className="flex items-center justify-between p-3.5 rounded-xl border hover:bg-muted/40 transition-colors bg-muted/10">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <UserInitials name={opportunity.account.name} />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-medium text-muted-foreground">{t('Account')}</p>
+                                                        <p className="text-sm font-semibold text-foreground truncate">{opportunity.account.name}</p>
+                                                        {opportunity.account.email && <p className="text-xs text-muted-foreground truncate">{opportunity.account.email}</p>}
+                                                    </div>
+                                                </div>
+                                                {hasPermission(permissions, 'view-accounts') && (
+                                                    <TooltipProvider delayDuration={200}>
+                                                      <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                          <Link href={route('accounts.show', opportunity.account.id)} className="ml-3 flex-shrink-0">
+                                                            <Eye className="h-4 w-4 text-gray-500" />
+                                                          </Link>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
+                                                      </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center p-3.5 rounded-xl border border-border bg-muted/20">
+                                                <p className="text-xs text-muted-foreground">{t('No account linked')}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Contact */}
+                                        {opportunity.contact ? (
+                                            <div className="flex items-center justify-between p-3.5 rounded-xl border hover:bg-muted/40 transition-colors bg-muted/10">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <UserInitials name={opportunity.contact.name} />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-medium text-muted-foreground">{t('Contact')}</p>
+                                                        <p className="text-sm font-semibold text-foreground truncate">{opportunity.contact.name}</p>
+                                                        {opportunity.contact.email && <p className="text-xs text-muted-foreground truncate">{opportunity.contact.email}</p>}
+                                                    </div>
+                                                </div>
+                                                {hasPermission(permissions, 'view-contacts') && (
+                                                    <TooltipProvider delayDuration={200}>
+                                                      <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                          <Link href={route('contacts.show', opportunity.contact.id)} className="ml-3 flex-shrink-0">
+                                                            <Eye className="h-4 w-4 text-gray-500" />
+                                                          </Link>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
+                                                      </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center p-3.5 rounded-xl border border-border bg-muted/20">
+                                                <p className="text-xs text-muted-foreground">{t('No contact linked')}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Section 3: Notes & Description */}
+                                {(opportunity.notes || opportunity.description) && (
+                                    <div className="pt-6 border-t border-border">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {opportunity.notes && (
+                                                <div className="p-4 rounded-xl border bg-muted/15 space-y-1.5">
+                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                        <FileText className="h-3.5 w-3.5" />
+                                                        {t('Notes')}
+                                                    </p>
+                                                    <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{opportunity.notes}</p>
+                                                </div>
+                                            )}
+                                            {opportunity.description && (
+                                                <div className="p-4 rounded-xl border bg-muted/15 space-y-1.5">
+                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                                        <FileText className="h-3.5 w-3.5" />
+                                                        {t('Description')}
+                                                    </p>
+                                                    <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{opportunity.description}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Related Records */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <Building className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Related Records')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5 space-y-3">
-                            {opportunity.account ? (
-                                <div className="flex items-center justify-between p-3.5 rounded-xl border hover:bg-muted/40 transition-colors">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                        <UserInitials name={opportunity.account.name} />
-                                        <div className="min-w-0">
-                                            <p className="text-xs font-medium text-muted-foreground">{t('Account')}</p>
-                                            <p className="text-sm font-semibold text-foreground truncate">{opportunity.account.name}</p>
-                                            {opportunity.account.email && <p className="text-xs text-muted-foreground truncate">{opportunity.account.email}</p>}
-                                        </div>
-                                    </div>
-                                    {hasPermission(permissions, 'view-accounts') && (
-                                        <TooltipProvider delayDuration={200}>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Link href={route('accounts.show', opportunity.account.id)} className="ml-3 flex-shrink-0">
-                                                <Eye className="h-4 w-4 text-gray-500" />
-                                              </Link>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex items-center p-3.5 rounded-xl border border-border bg-muted/20">
-                                    <p className="text-xs text-muted-foreground">{t('No account linked')}</p>
-                                </div>
-                            )}
-                            {opportunity.contact ? (
-                                <div className="flex items-center justify-between p-3.5 rounded-xl border hover:bg-muted/40 transition-colors">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                        <UserInitials name={opportunity.contact.name} />
-                                        <div className="min-w-0">
-                                            <p className="text-xs font-medium text-muted-foreground">{t('Contact')}</p>
-                                            <p className="text-sm font-semibold text-foreground truncate">{opportunity.contact.name}</p>
-                                            {opportunity.contact.email && <p className="text-xs text-muted-foreground truncate">{opportunity.contact.email}</p>}
-                                        </div>
-                                    </div>
-                                    {hasPermission(permissions, 'view-contacts') && (
-                                        <TooltipProvider delayDuration={200}>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Link href={route('contacts.show', opportunity.contact.id)} className="ml-3 flex-shrink-0">
-                                                <Eye className="h-4 w-4 text-gray-500" />
-                                              </Link>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex items-center p-3.5 rounded-xl border border-border bg-muted/20">
-                                    <p className="text-xs text-muted-foreground">{t('No contact linked')}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Notes & Description */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Notes')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="max-h-[150px] overflow-y-auto">
-                                <div className="px-5 py-4">
-                                    {opportunity.notes ? (
-                                        <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{opportunity.notes}</p>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                                            <FileText className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                                            <p className="text-sm text-muted-foreground">{t('No notes available')}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Description')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            <div className="max-h-[150px] overflow-y-auto">
-                                <div className="px-5 py-4">
-                                    {opportunity.description ? (
-                                        <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{opportunity.description}</p>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                                            <FileText className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                                            <p className="text-sm text-muted-foreground">{t('No description available')}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                            </CardContent>
+                        </Card>
 
                 {/* Tasks & Follow-ups */}
                 <EntityTasksCard
@@ -365,7 +397,20 @@ export default function OpportunityShow() {
                                         <CardHeader className="border-b py-3 px-4">
                                             <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
                                                 <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" />{t('Calls')}</div>
-                                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{callItems.length}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{callItems.length}</span>
+                                                    {hasPermission(permissions, 'create-calls') && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 px-2 text-xs flex items-center gap-1"
+                                                            onClick={() => setIsLogCallModalOpen(true)}
+                                                        >
+                                                            <Plus className="h-3 w-3" />
+                                                            {t('Log Call')}
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="p-0">
@@ -421,114 +466,25 @@ export default function OpportunityShow() {
                     );
                 })()}
 
-                {/* Products */}
-                <Card className="shadow-sm overflow-hidden">
-                    {/* Card Header */}
-                    <CardHeader className="border-b py-3.5 px-5">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <ShoppingCart className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Products')}
-                            </CardTitle>
-                        </div>
-                    </CardHeader>
+                {/* Products (Catalogue) */}
+                <EntityProductsCard
+                    parentModule="opportunity"
+                    parentId={opportunity.id}
+                    parentName={opportunity.name}
+                    products={opportunity.products || []}
+                    activeProducts={activeProducts}
+                    permissions={permissions}
+                />
 
-                    <CardContent className="p-0">
-                        {opportunity.products && opportunity.products.length > 0 ? (
-                            <>
-                                {/* Table */}
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-[#F0F0F1] dark:bg-gray-800 border-b hover:!bg-[#F0F0F1] dark:hover:!bg-gray-800">
-                                            <TableHead className="py-2.5 font-semibold">{t('Product')}</TableHead>
-                                            <TableHead className="py-2.5 font-semibold text-center">{t('Quantity')}</TableHead>
-                                            <TableHead className="py-2.5 font-semibold text-center">{t('Unit Price')}</TableHead>
-                                            <TableHead className="py-2.5 font-semibold text-center">{t('Tax')}</TableHead>
-                                            <TableHead className="py-2.5 font-semibold text-right">{t('Total')}</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {opportunity.products.map((product: any, index: number) => {
-                                            const lineTotal = Number(product.pivot?.total_price || 0);
-                                            const taxAmount = product.tax ? (lineTotal * Number(product.tax.rate || 0)) / 100 : 0;
-                                            return (
-                                                <TableRow key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-b">
-                                                    <TableCell className="py-3">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            {product.main_image_url ? (
-                                                                <a href={product.main_image_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                                                                    <img src={product.main_image_url} alt={product.name} className="w-11 h-11 rounded-lg object-cover border border-border hover:opacity-80 transition-opacity cursor-pointer" />
-                                                                </a>
-                                                            ) : (
-                                                                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 border border-border">
-                                                                    <Package className="h-4 w-4 text-muted-foreground/40" />
-                                                                </div>
-                                                            )}
-                                                            <div className="min-w-0">
-                                                                <p className="text-sm font-bold text-foreground truncate">{product.name}</p>
-                                                                {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
-                                                                {product.category?.name && (
-                                                                    <span className="mt-1 inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-                                                                        {product.category.name}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-center">
-                                                        <p className="text-sm font-semibold text-foreground">{product.pivot.quantity}</p>
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-center">
-                                                        <p className="text-sm font-semibold font-mono text-foreground">{formatCurrency(product.pivot.unit_price)}</p>
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-center">
-                                                        {product.tax ? (
-                                                            <>
-                                                                <p className="text-sm font-semibold text-foreground">{product.tax.name} ({parseFloat(product.tax.rate).toFixed(2)}%)</p>
-                                                                <p className="text-xs font-mono text-muted-foreground mt-0.5">{formatCurrency(taxAmount)}</p>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-xs text-muted-foreground">—</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right">
-                                                        <p className="text-sm font-bold font-mono text-emerald-600">{formatCurrency(lineTotal + taxAmount)}</p>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-
-                                <div className="flex flex-col md:flex-row items-start md:items-end justify-end gap-4 px-6 py-5 border-t bg-muted/10">
-                                    <div className="w-full max-w-sm border rounded-xl overflow-hidden">
-                                        <div className="flex items-center justify-between px-4 py-3 border-b">
-                                            <span className="text-sm text-muted-foreground font-medium">{t('Subtotal')}</span>
-                                            <span className="text-sm font-semibold font-mono text-foreground">{formatCurrency(subtotal)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between px-4 py-3 border-b">
-                                            <span className="text-sm text-muted-foreground font-medium">{t('Total Tax')}</span>
-                                            <span className="text-sm font-semibold font-mono text-foreground">{formatCurrency(totalTax)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between px-4 py-3">
-                                            <span className="text-sm font-bold text-foreground">{t('Grand Total')}</span>
-                                            <span className="text-lg font-bold font-mono text-emerald-600">{formatCurrency(grandTotal)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                                    <Package className="h-8 w-8 text-muted-foreground/40" />
-                                </div>
-                                <p className="text-sm font-medium text-muted-foreground">{t('No products added to this opportunity')}</p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                {/* Services */}
+                <EntityServicesCard
+                    parentModule="opportunity"
+                    parentId={opportunity.id}
+                    parentName={opportunity.name}
+                    services={opportunity.services || []}
+                    activeServices={activeServices}
+                    permissions={permissions}
+                />
 
                 {/* Related Quotes */}
                 {opportunity.quotes?.length > 0 && (
@@ -562,213 +518,40 @@ export default function OpportunityShow() {
                 )}
                     </div>
 
-                    {/* Activity Stream */}
+                    {/* Right Column: Journey & Activity Timeline */}
                     {hasPermission(permissions, 'view-stream') && (
-                        <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 space-y-6">
-                            <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <MessageCircle className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Activity Stream')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {hasPermission(permissions, 'create-opportunities') && (
-                                <div className="px-5 pt-4 pb-4 border-b">
-                                    <form onSubmit={(e) => {
-                                        e.preventDefault();
-                                        if (newComment.trim()) {
-                                            router.post(route('opportunities.comments.store', opportunity.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
-                                        }
-                                    }}>
-                                        <div className="flex items-start gap-3">
-                                            <TooltipProvider delayDuration={200}>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Avatar className="w-8 h-8 flex-shrink-0 mt-1">
-                                                            <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
-                                                            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
-                                                        </Avatar>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top"><p>{auth?.user?.name || t('User')}</p></TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                            <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
-                                                <Textarea
-                                                    placeholder={t('Write a comment...')}
-                                                    value={newComment}
-                                                    onChange={(e) => setNewComment(e.target.value)}
-                                                    className="border-0 resize-none focus-visible:ring-0 bg-transparent"
-                                                    rows={2}
-                                                />
-                                                <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
-                                                    <TooltipProvider delayDuration={200}>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
-                                                                    <Send className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-                            <div className="max-h-[520px] overflow-y-auto border-t">
-                                {streamItems && streamItems.length > 0 ? (
-                                    <div className="py-5 px-5">
-                                        {streamItems.map((activity: any, index: number) => {
-                                            const getActivityBadgeColor = (type: string): string => {
-                                                switch (type) {
-                                                    case 'created': return 'bg-green-50 text-green-700 ring-green-600/20';
-                                                    case 'updated': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
-                                                    case 'deleted': return 'bg-red-50 text-red-700 ring-red-600/20';
-                                                    case 'assigned': return 'bg-purple-50 text-purple-700 ring-purple-600/20';
-                                                    case 'comment': return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
-                                                    default: return 'bg-gray-50 text-gray-700 ring-gray-600/20';
-                                                }
-                                            };
-                                            const badgeCls = getActivityBadgeColor(activity.activity_type);
-                                            const isEditing = editingComment === activity.id;
-                                            return (
-                                                <div key={activity.id || index} className="relative flex gap-3 pb-4">
-                                                    <div className="flex flex-col items-center flex-shrink-0 w-9">
-                                                        <TooltipProvider delayDuration={200}>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Avatar className="w-9 h-9 flex-shrink-0 relative z-10">
-                                                                        <AvatarImage src={activity.user?.avatar} alt={activity.user?.name || 'U'} />
-                                                                        <AvatarFallback className="text-xs bg-muted text-muted-foreground font-bold">{getInitials(activity.user?.name || 'U')}</AvatarFallback>
-                                                                    </Avatar>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent side="top"><p>{activity.user?.name || t('System')}</p></TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                        {index < streamItems.length - 1 && (
-                                                            <div className="absolute left-[18px] top-9 bottom-0 w-px bg-gray-300 dark:bg-gray-600" />
-                                                        )}
-                                                    </div>
-                                                    <div className={`flex-1 min-w-0 rounded-xl border bg-card shadow-sm overflow-hidden ${isEditing ? 'border-emerald-400 ring-1 ring-emerald-300' : ''}`}>
-                                                        <div className={`flex items-center justify-between gap-2 px-4 py-2.5 ${isEditing ? 'bg-emerald-50/60' : 'bg-muted/30'} border-b`}>
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="text-sm font-semibold text-foreground">{activity.user?.name || t('System')}</span>
-                                                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${badgeCls}`}>
-                                                                    {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
-                                                                </span>
-                                                                <span className="text-xs text-muted-foreground">{formatRelativeTime(activity.created_at)}</span>
-                                                            </div>
-                                                            {!isEditing && (
-                                                                <div className="flex items-center gap-1 flex-shrink-0">
-                                                                    {activity.activity_type === 'comment' && activity.user_id === auth?.user?.id && hasPermission(permissions, 'edit-opportunities') && (
-                                                                        <TooltipProvider delayDuration={200}>
-                                                                            <Tooltip>
-                                                                                <TooltipTrigger asChild>
-                                                                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                                                                        onClick={() => { setEditingComment(activity.id); setEditCommentText(activity.description); }}>
-                                                                                        <Edit className="h-3 w-3" />
-                                                                                    </Button>
-                                                                                </TooltipTrigger>
-                                                                                <TooltipContent side="top"><p>{t('Edit')}</p></TooltipContent>
-                                                                            </Tooltip>
-                                                                        </TooltipProvider>
-                                                                    )}
-                                                                    {hasPermission(permissions, 'delete-stream') && (
-                                                                        <TooltipProvider delayDuration={200}>
-                                                                            <Tooltip>
-                                                                                <TooltipTrigger asChild>
-                                                                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                                                                        onClick={() => { setCurrentActivity(activity); setIsDeleteModalOpen(true); }}>
-                                                                                        <Trash2 className="h-3 w-3" />
-                                                                                    </Button>
-                                                                                </TooltipTrigger>
-                                                                                <TooltipContent side="top"><p>{t('Delete')}</p></TooltipContent>
-                                                                            </Tooltip>
-                                                                        </TooltipProvider>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="px-4 py-3">
-                                                            {activity.activity_type === 'comment' ? (
-                                                                isEditing ? (
-                                                                    <div className="space-y-3">
-                                                                        <Textarea
-                                                                            value={editCommentText}
-                                                                            onChange={(e) => setEditCommentText(e.target.value)}
-                                                                            className="w-full resize-none border-emerald-300 focus-visible:ring-emerald-400"
-                                                                            rows={3}
-                                                                            autoFocus
-                                                                        />
-                                                                        <div className="flex items-center justify-end gap-2">
-                                                                            <Button size="sm" variant="outline" onClick={() => setEditingComment(null)}>{t('Cancel')}</Button>
-                                                                            <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => {
-                                                                                router.put(route('opportunities.comments.update-activity', { opportunity: opportunity.id, activity: activity.id }), { comment: editCommentText }, { preserveScroll: true });
-                                                                                setEditingComment(null);
-                                                                            }}>{t('Save')}</Button>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <p className="text-sm text-foreground">{activity.description}</p>
-                                                                )
-                                                            ) : activity.description?.includes('into') ? (
-                                                                <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activity.description }} />
-                                                            ) : activity.title ? (
-                                                                <p className="text-sm text-muted-foreground">{activity.title}</p>
-                                                            ) : (
-                                                                <p className="text-sm text-muted-foreground">{activity.description}</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-12 text-muted-foreground">
-                                        <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                                        <p className="text-sm">{t('No activities found')}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                            </Card>
+                        <div className="w-full lg:w-[400px] xl:w-[440px] flex-shrink-0 space-y-6">
+                            <EntityJourneyTimeline
+                                streamItems={streamItems || []}
+                                entityType="opportunity"
+                                entityId={opportunity.id}
+                                entityName={opportunity.name}
+                                recipientEmail={opportunity.contact?.email || opportunity.account?.email || ''}
+                                recipientName={opportunity.contact?.name || opportunity.account?.name || opportunity.name}
+                                canComment={hasPermission(permissions, 'create-opportunities')}
+                                canEdit={hasPermission(permissions, 'edit-opportunities')}
+                                canDeleteStream={hasPermission(permissions, 'delete-stream')}
+                                commentStoreRoute={route('opportunities.comments.store', opportunity.id)}
+                                commentUpdateActivityRoute="opportunities.comments.update-activity"
+                                deleteActivityRoute="opportunities.delete-activity"
+                                deleteAllActivitiesRoute="opportunities.delete-activities"
+                            />
                         </div>
                     )}
                 </div>
 
-
             </div>
 
-            {/* Delete Activity Modal */}
-            <CrudDeleteModal
-                isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
-                onConfirm={() => {
-                    router.delete(route('opportunities.delete-activity', { opportunity: opportunity.id, activity: currentActivity.id }), {
-                        preserveScroll: true
-                    });
-                    setIsDeleteModalOpen(false);
-                }}
-                itemName={t('this activity')}
-                entityName={t('activity')}
-            />
-
-            {/* Delete All Activities Modal */}
-            <CrudDeleteModal
-                isOpen={isDeleteAllModalOpen}
-                onClose={() => setIsDeleteAllModalOpen(false)}
-                onConfirm={() => {
-                    router.delete(route('opportunities.delete-activities', opportunity.id), {
-                        preserveScroll: true
-                    });
-                    setIsDeleteAllModalOpen(false);
-                }}
-                itemName={t('all activities for {{name}}', { name: opportunity.name })}
-                entityName={t('activities')}
+            {/* Log Call Modal */}
+            <LogCallModal
+                isOpen={isLogCallModalOpen}
+                onClose={() => setIsLogCallModalOpen(false)}
+                parentModule="opportunity"
+                parentId={opportunity.id}
+                parentName={opportunity.name}
+                users={users}
+                defaultAssigneeId={opportunity.assigned_to}
+                contactId={opportunity.contact_id}
             />
         </PageTemplate>
     );

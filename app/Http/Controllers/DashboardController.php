@@ -1368,10 +1368,12 @@ class DashboardController extends Controller
             ['time' => '1 PM', 'status' => 'idle', 'color' => '#f59e0b', 'label' => 'Lunch Break (01:15 - 02:00)'],
             ['time' => '2 PM', 'status' => 'active', 'color' => '#10b981', 'label' => 'Proposal Prep (02:00 - 03:30)'],
             ['time' => '3 PM', 'status' => 'active', 'color' => '#10b981', 'label' => 'Follow-up Calls (03:30 - 04:45)'],
-            ['time' => '4 PM', 'status' => 'idle', 'color' => '#f59e0b', 'label' => 'Break / Transition'],
             ['time' => '5 PM', 'status' => 'active', 'color' => '#10b981', 'label' => 'CRM Updates & Reports (05:15 - 06:30)'],
             ['time' => '6 PM', 'status' => 'active', 'color' => '#10b981', 'label' => 'Day Wrap-up'],
         ];
+
+        // Notifications for follow-ups and notes
+        $notificationsData = $this->getFollowupsAndNotesNotifications($companyId, $targetSalespersonId, $viewScope, $tasksScopeAll);
 
         // Package comprehensive dashboard payload
         $dashboardData = [
@@ -1383,6 +1385,7 @@ class DashboardController extends Controller
             'period' => $period,
             'canViewAllSalesData' => $canViewAllSalesData,
             'viewScope' => $viewScope,
+            'notifications' => $notificationsData,
             'selectedSalespersonId' => $targetSalespersonId,
             'availableSalespersons' => $availableSalespersons,
             'userProfile' => [
@@ -1471,6 +1474,269 @@ class DashboardController extends Controller
             'canViewAll' => $canViewAll,
             'filters' => request()->all(['role_view', 'period', 'assigned_to', 'view_scope', 'chart_year', 'lead_year']),
         ]);
+    }
+
+    /**
+     * Resolve real-time follow-ups (overdue, today, upcoming) and recent notes for dashboard notifications.
+     */
+    private function getFollowupsAndNotesNotifications(int $companyId, ?int $targetSalespersonId, string $viewScope, bool $tasksScopeAll): array
+    {
+        $today = now()->format('Y-m-d');
+        $followups = [];
+        $notes = [];
+
+        $overdueCount = 0;
+        $todayCount = 0;
+        $upcomingCount = 0;
+
+        // 1. Tasks & Follow-ups
+        try {
+            if (class_exists('\App\Models\Task')) {
+                $taskQuery = \App\Models\Task::where('created_by', $companyId)
+                    ->whereNotIn('status', ['completed', 'cancelled']);
+
+                if ($viewScope !== 'all' || !$tasksScopeAll) {
+                    if ($targetSalespersonId) {
+                        $taskQuery->where('assigned_to', $targetSalespersonId);
+                    }
+                }
+
+                $tasks = $taskQuery->with([
+                    'lead:id,name,company',
+                    'account:id,name',
+                    'opportunity:id,name',
+                    'contact:id,name',
+                    'assignedUser:id,name,avatar',
+                    'taskType',
+                    'taskPriority'
+                ])->orderBy('due_date', 'asc')
+                  ->orderBy('due_time', 'asc')
+                  ->limit(25)
+                  ->get();
+
+                foreach ($tasks as $task) {
+                    $due = $task->due_date ? $task->due_date->format('Y-m-d') : null;
+                    $isOverdue = $due && $due < $today;
+                    $isToday = $due && $due === $today;
+
+                    if ($isOverdue) {
+                        $overdueCount++;
+                        $urgency = 'overdue';
+                        $urgencyLabel = 'Overdue by ' . max(1, now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($due))) . 'd';
+                    } elseif ($isToday) {
+                        $todayCount++;
+                        $urgency = 'today';
+                        $urgencyLabel = $task->due_time ? 'Today, ' . date('h:i A', strtotime($task->due_time)) : 'Due Today';
+                    } else {
+                        $upcomingCount++;
+                        $urgency = 'upcoming';
+                        $urgencyLabel = $due ? date('M d', strtotime($due)) : 'Upcoming';
+                    }
+
+                    $parentModule = 'task';
+                    $parentName = 'General Task';
+                    $parentUrl = route('tasks.show', $task->id);
+
+                    if ($task->lead) {
+                        $parentModule = 'lead';
+                        $parentName = $task->lead->name . ($task->lead->company ? " ({$task->lead->company})" : '');
+                        $parentUrl = route('leads.show', $task->lead_id);
+                    } elseif ($task->account) {
+                        $parentModule = 'account';
+                        $parentName = $task->account->name;
+                        $parentUrl = route('accounts.show', $task->account_id);
+                    } elseif ($task->opportunity) {
+                        $parentModule = 'opportunity';
+                        $parentName = $task->opportunity->name;
+                        $parentUrl = route('opportunities.show', $task->opportunity_id);
+                    } elseif ($task->contact) {
+                        $parentModule = 'contact';
+                        $parentName = $task->contact->name;
+                        $parentUrl = route('contacts.show', $task->contact_id);
+                    }
+
+                    $followups[] = [
+                        'id' => $task->id,
+                        'title' => $task->title,
+                        'description' => $task->description,
+                        'type' => 'task',
+                        'typeName' => $task->taskType?->name ?? 'Follow-up',
+                        'typeIcon' => $task->taskType?->icon ?? 'Clock',
+                        'priority' => $task->taskPriority?->name ?? ($task->priority ?? 'Medium'),
+                        'priorityColor' => $task->taskPriority?->color ?? '#3b82f6',
+                        'status' => $task->status,
+                        'urgency' => $urgency,
+                        'urgencyLabel' => $urgencyLabel,
+                        'isOverdue' => $isOverdue,
+                        'isToday' => $isToday,
+                        'dueDate' => $due,
+                        'dueTime' => $task->due_time,
+                        'parentModule' => $parentModule,
+                        'parentName' => $parentName,
+                        'parentUrl' => $parentUrl,
+                        'assignedTo' => $task->assignedUser?->name ?? 'Unassigned',
+                        'assignedAvatar' => $task->assignedUser?->avatar ? (check_file($task->assignedUser->getRawOriginal('avatar')) ? get_file($task->assignedUser->getRawOriginal('avatar')) : null) : null,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 2. Planned Calls
+        try {
+            if (class_exists('\App\Models\Call')) {
+                $callQuery = \App\Models\Call::where('created_by', $companyId)
+                    ->where('status', 'planned')
+                    ->whereDate('start_date', '<=', now()->addDays(2));
+
+                if ($viewScope !== 'all' || !$tasksScopeAll) {
+                    if ($targetSalespersonId) {
+                        $callQuery->where('assigned_to', $targetSalespersonId);
+                    }
+                }
+
+                $calls = $callQuery->with(['assignedUser:id,name,avatar'])->orderBy('start_date', 'asc')->limit(10)->get();
+                foreach ($calls as $call) {
+                    $due = $call->start_date ? $call->start_date->format('Y-m-d') : null;
+                    $isOverdue = $due && $due < $today;
+                    $isToday = $due && $due === $today;
+
+                    if ($isOverdue) $overdueCount++;
+                    elseif ($isToday) $todayCount++;
+                    else $upcomingCount++;
+
+                    $followups[] = [
+                        'id' => 'call_' . $call->id,
+                        'callId' => $call->id,
+                        'title' => $call->title,
+                        'description' => $call->description,
+                        'type' => 'call',
+                        'typeName' => 'Call',
+                        'typeIcon' => 'Phone',
+                        'priority' => 'Medium',
+                        'priorityColor' => '#10b981',
+                        'status' => $call->status,
+                        'urgency' => $isOverdue ? 'overdue' : ($isToday ? 'today' : 'upcoming'),
+                        'urgencyLabel' => $isOverdue ? 'Overdue Call' : ($isToday ? 'Call Today' : 'Upcoming Call'),
+                        'isOverdue' => $isOverdue,
+                        'isToday' => $isToday,
+                        'dueDate' => $due,
+                        'dueTime' => $call->start_time ? $call->start_time->format('H:i') : null,
+                        'parentModule' => $call->parent_module ?? 'lead',
+                        'parentName' => 'Call Follow-up',
+                        'parentUrl' => route('calls.show', $call->id),
+                        'assignedTo' => $call->assignedUser?->name ?? 'Unassigned',
+                        'assignedAvatar' => $call->assignedUser?->avatar ? (check_file($call->assignedUser->getRawOriginal('avatar')) ? get_file($call->assignedUser->getRawOriginal('avatar')) : null) : null,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 3. Recent Notes & Comments
+        try {
+            // Task Notes
+            if (class_exists('\App\Models\TaskNote')) {
+                $taskNotes = \App\Models\TaskNote::whereHas('task', fn($q) => $q->where('created_by', $companyId))
+                    ->with(['user:id,name,avatar', 'task:id,title,lead_id,account_id,opportunity_id', 'task.lead:id,name', 'task.account:id,name', 'task.opportunity:id,name'])
+                    ->latest()
+                    ->limit(8)
+                    ->get();
+
+                foreach ($taskNotes as $tn) {
+                    $entityName = $tn->task?->title ?? 'Task';
+                    $entityUrl = route('tasks.show', $tn->task_id);
+                    $entityType = 'Task';
+
+                    if ($tn->task?->lead) {
+                        $entityType = 'Lead';
+                        $entityName = $tn->task->lead->name;
+                        $entityUrl = route('leads.show', $tn->task->lead_id);
+                    } elseif ($tn->task?->account) {
+                        $entityType = 'Account';
+                        $entityName = $tn->task->account->name;
+                        $entityUrl = route('accounts.show', $tn->task->account_id);
+                    } elseif ($tn->task?->opportunity) {
+                        $entityType = 'Opportunity';
+                        $entityName = $tn->task->opportunity->name;
+                        $entityUrl = route('opportunities.show', $tn->task->opportunity_id);
+                    }
+
+                    $notes[] = [
+                        'id' => 'tn_' . $tn->id,
+                        'content' => $tn->note,
+                        'entityType' => $entityType,
+                        'entityName' => $entityName,
+                        'entityUrl' => $entityUrl,
+                        'authorName' => $tn->user?->name ?? 'Team Member',
+                        'authorAvatar' => $tn->user?->avatar ? (check_file($tn->user->getRawOriginal('avatar')) ? get_file($tn->user->getRawOriginal('avatar')) : null) : null,
+                        'createdAt' => $tn->created_at ? $tn->created_at->diffForHumans() : 'Recently',
+                        'timestamp' => $tn->created_at ? $tn->created_at->timestamp : 0,
+                    ];
+                }
+            }
+
+            // Lead Comments
+            if (class_exists('\App\Models\LeadComment')) {
+                $leadComments = \App\Models\LeadComment::where('created_by', $companyId)
+                    ->with(['user:id,name,avatar', 'lead:id,name'])
+                    ->latest()
+                    ->limit(8)
+                    ->get();
+
+                foreach ($leadComments as $lc) {
+                    $notes[] = [
+                        'id' => 'lc_' . $lc->id,
+                        'content' => $lc->comment,
+                        'entityType' => 'Lead',
+                        'entityName' => $lc->lead?->name ?? 'Lead',
+                        'entityUrl' => $lc->lead_id ? route('leads.show', $lc->lead_id) : route('leads.index'),
+                        'authorName' => $lc->user?->name ?? 'Team Member',
+                        'authorAvatar' => $lc->user?->avatar ? (check_file($lc->user->getRawOriginal('avatar')) ? get_file($lc->user->getRawOriginal('avatar')) : null) : null,
+                        'createdAt' => $lc->created_at ? $lc->created_at->diffForHumans() : 'Recently',
+                        'timestamp' => $lc->created_at ? $lc->created_at->timestamp : 0,
+                    ];
+                }
+            }
+
+            // General / Standalone Notes
+            if (class_exists('\App\Models\Note')) {
+                $stdNotes = \App\Models\Note::where('created_by', $companyId)
+                    ->with('creator:id,name,avatar')
+                    ->latest()
+                    ->limit(8)
+                    ->get();
+
+                foreach ($stdNotes as $sn) {
+                    $notes[] = [
+                        'id' => 'sn_' . $sn->id,
+                        'content' => $sn->title . ($sn->content ? ": " . strip_tags($sn->content) : ''),
+                        'entityType' => 'Note',
+                        'entityName' => $sn->title,
+                        'entityUrl' => route('notes.index'),
+                        'authorName' => $sn->creator?->name ?? 'Team Member',
+                        'authorAvatar' => $sn->creator?->avatar ? (check_file($sn->creator->getRawOriginal('avatar')) ? get_file($sn->creator->getRawOriginal('avatar')) : null) : null,
+                        'createdAt' => $sn->created_at ? $sn->created_at->diffForHumans() : 'Recently',
+                        'timestamp' => $sn->created_at ? $sn->created_at->timestamp : 0,
+                    ];
+                }
+            }
+
+            // Sort notes by newest first
+            usort($notes, fn($a, $b) => $b['timestamp'] <=> $a['timestamp']);
+            $notes = array_slice($notes, 0, 15);
+
+        } catch (\Throwable $e) {}
+
+        return [
+            'summary' => [
+                'totalFollowups' => count($followups),
+                'overdueCount' => $overdueCount,
+                'todayCount' => $todayCount,
+                'upcomingCount' => $upcomingCount,
+                'notesCount' => count($notes),
+            ],
+            'followups' => $followups,
+            'notes' => $notes,
+        ];
     }
 
     /**

@@ -29,9 +29,9 @@ interface SearchAndFiltersProps {
     onSearch: (e: React.FormEvent) => void;
     searchPlaceholder?: string;
     filters?: FilterOption[];
-    hasActiveFilters: () => boolean;
-    activeFilterCount: () => number;
-    onResetFilters: () => void;
+    hasActiveFilters?: () => boolean;
+    activeFilterCount?: () => number;
+    onResetFilters?: () => void;
     // View toggle props
     showViewToggle?: boolean;
     activeView?: string;
@@ -58,6 +58,20 @@ export function SearchAndFilterBar({
     ],
 }: SearchAndFiltersProps) {
     const { t } = useTranslation();
+
+    const isFilterActive = () => {
+        if (typeof hasActiveFilters === 'function') {
+            return hasActiveFilters();
+        }
+        return filters.some(f => f.value && f.value !== 'all' && f.value !== '') || Boolean(searchTerm);
+    };
+
+    const countActiveFilters = () => {
+        if (typeof activeFilterCount === 'function') {
+            return activeFilterCount();
+        }
+        return filters.filter(f => f.value && f.value !== 'all' && f.value !== '').length;
+    };
 
     // Build active filter pills from non-empty filter values
     const activeFilters = filters.filter(f => {
@@ -151,21 +165,21 @@ export function SearchAndFilterBar({
                             size="sm"
                             className="h-9 text-gray-500 bg-transparent hover:bg-transparent hover:text-gray-500 dark:text-gray-700  dark:hover:text-gray-700"
                             onClick={onResetFilters}
-                            hidden={!hasActiveFilters()}
+                            hidden={!isFilterActive()}
                         >
                             <RefreshCcw />
                             {t("Clear Filters")}
                         </Button>
                         <Button
-                            variant={hasActiveFilters() ? "default" : "outline"}
+                            variant={isFilterActive() ? "default" : "outline"}
                             size="sm"
                             className="h-8 px-2 py-1 cursor-default"
                         >
                             <Filter className="h-4 w-4 mr-1.5" />
                             {t('Filters')}
-                            {hasActiveFilters() && (
+                            {isFilterActive() && (
                                 <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                    {activeFilterCount()}
+                                    {countActiveFilters()}
                                 </span>
                             )}
                         </Button>

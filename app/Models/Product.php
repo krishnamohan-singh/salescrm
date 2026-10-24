@@ -73,6 +73,20 @@ class Product extends BaseModel implements HasMedia
             ->withTimestamps();
     }
 
+    public function leads(): BelongsToMany
+    {
+        return $this->belongsToMany(Lead::class, 'lead_products')
+            ->withPivot('quantity', 'unit_price', 'total_price', 'notes')
+            ->withTimestamps();
+    }
+
+    public function accounts(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'account_products')
+            ->withPivot('quantity', 'unit_price', 'total_price', 'status', 'notes')
+            ->withTimestamps();
+    }
+
     public function quotes(): BelongsToMany
     {
         return $this->belongsToMany(Quote::class, 'quote_products')

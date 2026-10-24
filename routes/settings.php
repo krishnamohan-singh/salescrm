@@ -120,5 +120,6 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     Route::post('settings/google-calendar', [SystemSettingsController::class, 'updateGoogleCalendar'])->name('settings.google-calendar.update');
     Route::post('settings/google-calendar/sync', [SystemSettingsController::class, 'syncGoogleCalendar'])->name('settings.google-calendar.sync');
 
-
+    // Google Mail (Gmail) Settings routes
+    Route::post('settings/google-mail', [\App\Http\Controllers\GoogleMailController::class, 'updateSettings'])->name('settings.google-mail.update');
 });

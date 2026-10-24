@@ -721,7 +721,7 @@ export default function SalesDayPlanCreate() {
                                     onCheckedChange={(checked) => setData('send_email_now', Boolean(checked))}
                                 />
                                 <Label htmlFor="send_email_now" className="text-xs font-medium cursor-pointer">
-                                    {t('Notify manager immediately upon submission')}
+                                    {t('Send report notification to user (keeping manager in CC) upon submission')}
                                 </Label>
                             </div>
 

@@ -567,7 +567,7 @@ export default function SalesDayPlanEdit() {
                                 onCheckedChange={(checked) => setData('send_email_now', Boolean(checked))}
                             />
                             <Label htmlFor="send_email_now_bottom" className="text-xs font-medium cursor-pointer">
-                                {t('Email complete EOD summary to manager upon submit')}
+                                {t('Send complete EOD report to user (keeping manager in CC) upon submit')}
                             </Label>
                         </div>
 

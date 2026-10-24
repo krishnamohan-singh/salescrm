@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\AccountActivity;
+use App\Models\ContactActivity;
 use App\Models\InvoiceActivity;
 use App\Models\LeadActivity;
 use App\Models\OpportunityActivity;
@@ -18,6 +19,7 @@ class StreamController extends Controller
     {
         $modules = [
             'account_activities' => 'Account Activities',
+            'contact_activities' => 'Contact Activities',
             'lead_activities' => 'Lead Activities',
             'opportunity_activities' => 'Opportunity Activities',
             'invoice_activities' => 'Invoice Activities',
@@ -48,6 +50,32 @@ class StreamController extends Controller
     public function deleteAccountActivity($id)
     {
         $stream = AccountActivity::where('created_by', createdBy())->find($id);
+
+        if (!$stream) {
+            return back()->with('error', __('Permission denied.'));
+        }
+
+        $stream->delete();
+        return back()->with('success', __('Activity deleted successfully.'));
+    }
+
+    // Contact Activities
+    public function contactActivities()
+    {
+        $streams = ContactActivity::with(['user', 'contact'])
+            ->where('created_by', createdBy())
+            ->orderBy('created_at', 'desc')->get();
+
+        return Inertia::render('streams/show', [
+            'module' => 'contact_activities',
+            'moduleTitle' => 'Contact Activities',
+            'streams' => $streams
+        ]);
+    }
+
+    public function deleteContactActivity($id)
+    {
+        $stream = ContactActivity::where('created_by', createdBy())->find($id);
 
         if (!$stream) {
             return back()->with('error', __('Permission denied.'));

@@ -14,15 +14,17 @@ class SalesDailyReportMail extends Mailable
     public SalesDayPlan $dayPlan;
     public string $companyName;
     public ?string $managerNotes;
+    public array $managerCcList;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(SalesDayPlan $dayPlan, ?string $managerNotes = null)
+    public function __construct(SalesDayPlan $dayPlan, ?string $managerNotes = null, array $managerCcList = [])
     {
         $this->dayPlan = $dayPlan->load(['user', 'creator', 'reviewer']);
         $this->companyName = function_exists('getCompanyName') ? getCompanyName() : config('app.name');
         $this->managerNotes = $managerNotes;
+        $this->managerCcList = $managerCcList;
     }
 
     /**
@@ -41,6 +43,7 @@ class SalesDailyReportMail extends Mailable
                         'user' => $this->dayPlan->user,
                         'companyName' => $this->companyName,
                         'managerNotes' => $this->managerNotes,
+                        'managerCcList' => $this->managerCcList,
                     ]);
     }
 }

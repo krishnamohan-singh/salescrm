@@ -9,6 +9,7 @@ import {
     SalespersonDashboardView,
     SalesManagerDashboardView,
     AdminFounderDashboardView,
+    NotesFollowupNotificationCard,
 } from '@/components/dashboard';
 
 export default function Dashboard({
@@ -263,6 +264,11 @@ export default function Dashboard({
                     availableSalespersons={dashboardData?.availableSalespersons || []}
                     selectedSalespersonId={selectedSalespersonId}
                     onSalespersonChange={handleSalespersonChange}
+                />
+
+                {/* Notes & Follow-up Notifications Feed */}
+                <NotesFollowupNotificationCard
+                    notifications={dashboardData?.notifications}
                 />
 
                 {/* Conditional Rendering based on selected Role View */}

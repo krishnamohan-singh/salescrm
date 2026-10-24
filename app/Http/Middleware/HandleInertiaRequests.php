@@ -206,11 +206,17 @@ class HandleInertiaRequests extends Middleware
 
             }
             if (auth()->user() && auth()->user()->hasRole('company')) {
-                $lastPlanOrder = PlanOrder::where('user_id', auth()->id())->orderByDesc('processed_at')->first();
-                if($lastPlanOrder){
-                    $globalSettings['planExirationDate'] = $lastPlanOrder->billing_cycle == 'monthly' ? ($lastPlanOrder?->processed_at?->addMonth() ?? null) : ($lastPlanOrder?->processed_at?->addYear()?? null);
-             
+                try {
+                    $lastPlanOrder = PlanOrder::where('user_id', auth()->id())->orderByDesc('processed_at')->first();
+                    if ($lastPlanOrder && $lastPlanOrder->processed_at) {
+                        $processedAt = \Carbon\Carbon::parse($lastPlanOrder->processed_at);
+                        $globalSettings['planExirationDate'] = $lastPlanOrder->billing_cycle == 'monthly' 
+                            ? $processedAt->copy()->addMonth()->toIso8601String() 
+                            : $processedAt->copy()->addYear()->toIso8601String();
                     }
+                } catch (\Throwable $e) {
+                    \Log::warning('Error calculating plan expiration date: ' . $e->getMessage());
+                }
             }
 
         }

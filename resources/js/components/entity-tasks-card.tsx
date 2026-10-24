@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, Link } from '@inertiajs/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,8 @@ import {
     Mail,
     Users,
     Video,
-    AlertCircle
+    AlertCircle,
+    Eye
 } from 'lucide-react';
 
 interface EntityTasksCardProps {
@@ -239,9 +240,14 @@ export function EntityTasksCard({
 
                                              <div>
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <span className={`text-sm font-medium ${isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                                    <Link
+                                                        href={route('tasks.show', task.id)}
+                                                        className={`text-sm font-medium hover:underline hover:text-primary transition-colors ${
+                                                            isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
+                                                        }`}
+                                                    >
                                                         {task.title}
-                                                    </span>
+                                                    </Link>
 
                                                     {/* Type Badge */}
                                                     {task.task_type ? (
@@ -329,6 +335,16 @@ export function EntityTasksCard({
                                         </div>
 
                                         <div className="flex items-center gap-1 self-end sm:self-center">
+                                            <Link href={route('tasks.show', task.id)}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                                                    title={t('View Task Details')}
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </Link>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

@@ -62,20 +62,34 @@ class TaskObserver
                 ]);
             }
 
-            // 4. Contact Activity (if contact has associated account_id and account activity not already logged)
-            if (!empty($task->contact_id) && empty($task->account_id)) {
-                $contact = Contact::find($task->contact_id);
-                if ($contact && $contact->account_id) {
-                    AccountActivity::create([
-                        'account_id' => $contact->account_id,
-                        'user_id' => $userId,
-                        'activity_type' => $activityType,
-                        'title' => $title . ' (Contact: ' . $contact->name . ')',
-                        'description' => $description,
-                        'old_values' => !empty($oldValues) ? $oldValues : null,
-                        'new_values' => !empty($newValues) ? $newValues : null,
-                        'created_by' => $createdBy,
-                    ]);
+            // 4. Contact Activity
+            if (!empty($task->contact_id)) {
+                \App\Models\ContactActivity::create([
+                    'contact_id' => $task->contact_id,
+                    'user_id' => $userId,
+                    'activity_type' => $activityType,
+                    'title' => $title,
+                    'description' => $description,
+                    'old_values' => !empty($oldValues) ? $oldValues : null,
+                    'new_values' => !empty($newValues) ? $newValues : null,
+                    'created_by' => $createdBy,
+                ]);
+
+                // Also log to Account if contact has account_id and account activity not already logged
+                if (empty($task->account_id)) {
+                    $contact = Contact::find($task->contact_id);
+                    if ($contact && $contact->account_id) {
+                        AccountActivity::create([
+                            'account_id' => $contact->account_id,
+                            'user_id' => $userId,
+                            'activity_type' => $activityType,
+                            'title' => $title . ' (Contact: ' . $contact->name . ')',
+                            'description' => $description,
+                            'old_values' => !empty($oldValues) ? $oldValues : null,
+                            'new_values' => !empty($newValues) ? $newValues : null,
+                            'created_by' => $createdBy,
+                        ]);
+                    }
                 }
             }
         } catch (\Exception $e) {

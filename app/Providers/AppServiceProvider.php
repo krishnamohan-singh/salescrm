@@ -11,12 +11,14 @@ use App\Models\Quote;
 use App\Models\SalesOrder;
 use App\Models\Invoice;
 use App\Models\PurchaseOrder;
+use App\Models\Contact;
 use App\Models\Task;
 use App\Models\LeadTask;
 use App\Observers\UserObserver;
 use App\Observers\PlanObserver;
 use App\Observers\LeadObserver;
 use App\Observers\AccountObserver;
+use App\Observers\ContactObserver;
 use App\Observers\OpportunityObserver;
 use App\Observers\QuoteObserver;
 use App\Observers\SalesOrderObserver;
@@ -34,6 +36,15 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\App\Services\WebhookService::class);
+
+        // Permanently disable Inertia SSR network calls (cPanel does not run Node SSR daemon on port 13714)
+        $this->app->bind(\Inertia\Ssr\Gateway::class, function () {
+            return new class implements \Inertia\Ssr\Gateway {
+                public function dispatch(array $page): ?\Inertia\Ssr\Response {
+                    return null;
+                }
+            };
+        });
 
         // Register our AssetServiceProvider
         $this->app->register(AssetServiceProvider::class);
@@ -55,6 +66,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Register the AccountObserver
         Account::observe(AccountObserver::class);
+
+        // Register the ContactObserver
+        Contact::observe(ContactObserver::class);
 
         // Register the OpportunityObserver
         Opportunity::observe(OpportunityObserver::class);

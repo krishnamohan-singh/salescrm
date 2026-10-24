@@ -49,7 +49,9 @@ export default function AccountEdit() {
         shipping_country: account.shipping_country ?? '',
         assigned_to: String(account.assigned_to ?? ''),
         status: account.status ?? 'active',
-        services: Array.isArray(account.services) ? account.services : (typeof account.services === 'string' ? JSON.parse(account.services || '[]') : []),
+        services: Array.isArray(account.services)
+            ? account.services.map((s: any) => (typeof s === 'string' ? s : (s?.name || String(s?.id || ''))))
+            : (typeof account.services === 'string' ? JSON.parse(account.services || '[]') : []),
     });
 
     const breadcrumbs = [

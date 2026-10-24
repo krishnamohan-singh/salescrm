@@ -44,7 +44,7 @@ class SendDailySalesDayPlanSummary extends Command
         $sentCount = 0;
 
         foreach ($companies as $company) {
-            $dayPlans = SalesDayPlan::with(['user', 'creator'])
+            $dayPlans = SalesDayPlan::with(['user', 'creator', 'reviewer'])
                 ->where('created_by', $company->id)
                 ->whereDate('plan_date', $targetDate)
                 ->whereIn('status', ['submitted', 'completed', 'reviewed', 'in_progress'])
@@ -54,20 +54,62 @@ class SendDailySalesDayPlanSummary extends Command
                 continue;
             }
 
+            // Resolve company managers once per company
+            $baseManagerEmails = User::where('created_by', $company->id)
+                ->where(function ($q) {
+                    $q->whereIn('type', ['sales-manager', 'manager', 'admin', 'company'])
+                      ->orWhereHas('roles', function ($rq) {
+                          $rq->whereIn('name', ['sales-manager', 'manager', 'sales manager', 'Team Lead', 'Sales Director', 'Director']);
+                      });
+                })
+                ->pluck('email')
+                ->filter()
+                ->toArray();
+
+            if (!empty($company->email)) {
+                $baseManagerEmails[] = $company->email;
+            }
+
             foreach ($dayPlans as $plan) {
-                $recipientEmail = $company->email;
-                if (!empty($recipientEmail)) {
-                    try {
-                        Mail::to($recipientEmail)->send(new SalesDailyReportMail($plan));
-                        $plan->update([
-                            'report_sent_at' => now(),
-                            'report_sent_to' => $recipientEmail,
-                        ]);
-                        $sentCount++;
-                        $this->line(" - Sent report of {$plan->user?->name} to {$recipientEmail}");
-                    } catch (\Exception $e) {
-                        $this->error(" - Error sending report for {$plan->user?->name}: " . $e->getMessage());
+                // Primary recipient: user/sales representative
+                $recipientEmail = $plan->user?->email ?: $company->email;
+                if (empty($recipientEmail) || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                    continue;
+                }
+
+                // Collect manager CCs for this plan
+                $managerEmails = $baseManagerEmails;
+                if ($plan->reviewer && !empty($plan->reviewer->email)) {
+                    $managerEmails[] = $plan->reviewer->email;
+                }
+
+                $cleanRecipient = strtolower(trim($recipientEmail));
+                $managerCcList = array_values(array_unique(array_filter($managerEmails, function ($em) use ($cleanRecipient) {
+                    $clean = strtolower(trim($em));
+                    return filter_var($clean, FILTER_VALIDATE_EMAIL) && $clean !== $cleanRecipient;
+                })));
+
+                try {
+                    $mail = Mail::to($recipientEmail);
+                    if (!empty($managerCcList)) {
+                        $mail->cc($managerCcList);
                     }
+                    $mail->send(new SalesDailyReportMail($plan, null, $managerCcList));
+
+                    $sentSummary = $recipientEmail;
+                    if (!empty($managerCcList)) {
+                        $sentSummary .= ' [CC: ' . implode(', ', $managerCcList) . ']';
+                    }
+
+                    $plan->update([
+                        'report_sent_at' => now(),
+                        'report_sent_to' => \Illuminate\Support\Str::limit($sentSummary, 250),
+                    ]);
+                    $sentCount++;
+                    $ccNote = !empty($managerCcList) ? " (CC: " . implode(', ', $managerCcList) . ")" : "";
+                    $this->line(" - Sent report of {$plan->user?->name} to {$recipientEmail}{$ccNote}");
+                } catch (\Exception $e) {
+                    $this->error(" - Error sending report for {$plan->user?->name}: " . $e->getMessage());
                 }
             }
         }

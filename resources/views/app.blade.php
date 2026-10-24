@@ -54,7 +54,14 @@
     @if (app()->environment('local'))
         @viteReactRefresh
     @endif
-    @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
+    @php
+        $pageComponent = "resources/js/pages/{$page['component']}.tsx";
+        try {
+            echo app(\Illuminate\Foundation\Vite::class)(['resources/js/app.tsx', $pageComponent]);
+        } catch (\Throwable $e) {
+            echo app(\Illuminate\Foundation\Vite::class)(['resources/js/app.tsx']);
+        }
+    @endphp
     <script>
         // Ensure base URL is correctly set for assets
         window.baseUrl = '{{ url('/') }}';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
-import { ArrowLeft, User, Building, MapPin, FileText, Phone, Mail, Globe, DollarSign, Calendar, Target, UserCheck, MessageCircle, Eye, Trash2, Send, Edit, Check, X, TrendingUp, Clock, Tag, Users, ListTodo, CheckSquare, Plus, Video, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User, Building, MapPin, FileText, Phone, PhoneCall, Mail, Globe, DollarSign, Calendar, Target, UserCheck, MessageCircle, Eye, Trash2, Send, Edit, Check, X, TrendingUp, Clock, Tag, Users, ListTodo, CheckSquare, Plus, Video, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -20,14 +20,19 @@ import { formatRelativeTime, getDisplayUrl } from '@/utils/helper';
 import { hasPermission } from '@/utils/authorization';
 import UserInitials from '@/components/user-initials';
 import { EntityTasksCard } from '@/components/entity-tasks-card';
+import { EntityServicesCard } from '@/components/entity-services-card';
+import { EntityProductsCard } from '@/components/entity-products-card';
+import { LogCallModal } from '@/components/log-call-modal';
+import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
 
 export default function LeadShow() {
   const { t } = useTranslation();
-  const { lead, streamItems, auth, relatedAccounts, relatedContacts, meetings, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [] } = usePage().props as any;
+  const { lead, streamItems, auth, relatedAccounts, relatedContacts, meetings, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [], activeServices = [], activeProducts = [] } = usePage().props as any;
   const comments = lead.comments || [];
   const isCompany = auth?.user?.type === 'company';
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
   const [currentActivity, setCurrentActivity] = useState<any>(null);
   const [newComment, setNewComment] = useState('');
   const [editingComment, setEditingComment] = useState<number | null>(null);
@@ -66,10 +71,16 @@ export default function LeadShow() {
       description={t('Lead details and related information')}
       breadcrumbs={breadcrumbs}
       actions={[
+        ...(hasPermission(permissions, 'create-calls') ? [{
+          label: t('Log Call'),
+          icon: <PhoneCall className="h-4 w-4 mr-2" />,
+          variant: 'outline' as const,
+          onClick: () => setIsLogCallModalOpen(true)
+        }] : []),
         {
           label: t('Back'),
           icon: <ArrowLeft className="h-4 w-4 mr-2" />,
-          variant: 'outline',
+          variant: 'outline' as const,
           onClick: () => router.visit(route('leads.index'))
         }
       ]}
@@ -77,12 +88,19 @@ export default function LeadShow() {
     >
       <div className="mx-auto space-y-6">
         {/* Summary Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {([
             { label: t('Lead Value'), value: formatCurrency(lead.value), icon: DollarSign, iconCls: 'text-emerald-600', blobCls: 'bg-emerald-50 dark:bg-emerald-900/30' },
             { label: t('Pipeline Stage'), value: lead.lead_status?.name || '—', icon: TrendingUp, iconCls: 'text-blue-600', blobCls: 'bg-blue-50 dark:bg-blue-900/30' },
             { label: t('Source'), value: lead.lead_source?.name || '—', icon: Tag, iconCls: 'text-orange-600', blobCls: 'bg-orange-50 dark:bg-orange-900/30' },
-            { label: t('Created'), value: window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString(), icon: Clock, iconCls: 'text-purple-600', blobCls: 'bg-purple-50 dark:bg-purple-900/30' },
+            {
+              label: t('Lead Age'),
+              value: lead.lead_age || t('Just now'),
+              icon: Clock,
+              iconCls: lead.lead_age_badge === 'aging' ? 'text-rose-600' : lead.lead_age_badge === 'warm' ? 'text-amber-600' : 'text-emerald-600',
+              blobCls: lead.lead_age_badge === 'aging' ? 'bg-rose-50 dark:bg-rose-900/30' : lead.lead_age_badge === 'warm' ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-emerald-50 dark:bg-emerald-900/30',
+            },
+            { label: t('Created'), value: window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString(), icon: Calendar, iconCls: 'text-purple-600', blobCls: 'bg-purple-50 dark:bg-purple-900/30' },
           ] as const).map(({ label, value, icon: Icon, iconCls, blobCls }) => (
             <Card key={label} className="relative overflow-hidden">
               <div className={`absolute top-0 right-0 w-20 h-20 ${blobCls} rounded-bl-full`} />
@@ -119,7 +137,7 @@ export default function LeadShow() {
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                     {t('Lead Information')}
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                     <div className="space-y-0.5">
                       <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
                       <div>{getStatusBadge(lead.status)}</div>
@@ -129,6 +147,21 @@ export default function LeadShow() {
                       <p className="text-sm font-medium text-foreground">{lead.lead_status?.name || '—'}</p>
                     </div>
                     <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-muted-foreground">{t('Lead Age')}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold border ${
+                          lead.lead_age_badge === 'aging'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                            : lead.lead_age_badge === 'warm'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                        }`}>
+                          <Clock className="h-3 w-3" />
+                          {lead.lead_age || t('Just now')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
                       <p className="text-xs font-medium text-muted-foreground">{t('Source')}</p>
                       <p className="text-sm font-medium text-foreground">{lead.lead_source?.name || '—'}</p>
                     </div>
@@ -136,19 +169,19 @@ export default function LeadShow() {
                       <p className="text-xs font-medium text-muted-foreground">{t('Conversion')}</p>
                       <div>
                         {lead.is_converted
-                          ? <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"><TrendingUp className="h-3 w-3" />{t('Converted')}</span>
-                          : <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-muted text-muted-foreground ring-1 ring-inset ring-border">{t('Not Converted')}</span>}
+                          ? <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20"><TrendingUp className="h-3 w-3" />{t('Converted')}</span>
+                          : <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground ring-1 ring-inset ring-border">{t('Not Converted')}</span>}
                       </div>
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-xs font-medium text-muted-foreground">{t('Account Name')}</p>
-                      <p className="text-sm font-medium text-foreground">{lead.account_name || '—'}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{lead.account_name || '—'}</p>
                     </div>
                     {lead.integration_source && (
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 sm:col-span-2 lg:col-span-3">
                         <p className="text-xs font-medium text-muted-foreground">{t('Integration Channel')}</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-primary/10 text-primary capitalize">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold bg-primary/10 text-primary capitalize">
                             {lead.integration_source === 'facebook' ? 'Facebook Lead Ads' : lead.integration_source === 'google_ads' ? 'Google Ads' : lead.integration_source === 'webhook' ? 'Custom Webhook' : 'REST API'}
                           </span>
                           {lead.external_lead_id && (
@@ -243,11 +276,15 @@ export default function LeadShow() {
                       <p className="text-xs font-medium text-muted-foreground">{t('Services')}</p>
                       {Array.isArray(lead.services) && lead.services.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {lead.services.map((service: string) => (
-                            <Badge key={service} variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 text-xs py-0.5 px-2">
-                              {service}
-                            </Badge>
-                          ))}
+                          {lead.services.map((service: any, index: number) => {
+                            const serviceName = typeof service === 'string' ? service : (service?.name || service?.code || '');
+                            const serviceKey = typeof service === 'string' ? `${service}-${index}` : (service?.id || index);
+                            return (
+                              <Badge key={serviceKey} variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800 text-xs py-0.5 px-2">
+                                {serviceName}
+                              </Badge>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">—</p>
@@ -440,6 +477,26 @@ export default function LeadShow() {
           defaultAssignedTo={lead.assigned_to}
         />
 
+        {/* Products (Catalogue) */}
+        <EntityProductsCard
+          parentModule="lead"
+          parentId={lead.id}
+          parentName={lead.name}
+          products={lead.products || []}
+          activeProducts={activeProducts}
+          permissions={permissions}
+        />
+
+        {/* Services (Catalogue) */}
+        <EntityServicesCard
+          parentModule="lead"
+          parentId={lead.id}
+          parentName={lead.name}
+          services={lead.services || []}
+          activeServices={activeServices}
+          permissions={permissions}
+        />
+
         {/* Activities */}
         {meetings?.length > 0 && (() => {
           const meetingItems = meetings.filter((m: any) => m.type !== 'call');
@@ -523,7 +580,20 @@ export default function LeadShow() {
                           <Phone className="h-3.5 w-3.5" />
                           {t('Calls')}
                         </div>
-                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{callItems.length}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{callItems.length}</span>
+                          {hasPermission(permissions, 'create-calls') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs flex items-center gap-1"
+                              onClick={() => setIsLogCallModalOpen(true)}
+                            >
+                              <Plus className="h-3 w-3" />
+                              {t('Log Call')}
+                            </Button>
+                          )}
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -581,225 +651,44 @@ export default function LeadShow() {
         })()}
           </div>{/* End Left Column */}
 
-          {/* Right Column: Activity Stream */}
+          {/* Right Column: Journey & Activity Timeline */}
           {hasPermission(permissions, 'view-stream') && (
-            <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 space-y-6">
-              <Card className="shadow-sm">
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center text-lg font-semibold">
-                <MessageCircle className="h-5 w-5 mr-3 text-muted-foreground" />
-                {t('Activity Stream')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {/* Add Comment Form */}
-              {hasPermission(permissions, 'create-leads') && (
-                <div className="px-5 pt-4 pb-4 border-b">
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (newComment.trim()) {
-                      router.post(route('leads.comments.store', lead.id), { comment: newComment }, { preserveScroll: true, onSuccess: () => setNewComment('') });
-                    }
-                  }}>
-                    <div className="flex items-start gap-3">
-                      <TooltipProvider delayDuration={200}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Avatar className="w-8 h-8 flex-shrink-0 mt-1">
-                              <AvatarImage src={auth?.user?.avatar} alt={auth?.user?.name || 'User'} />
-                              <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(auth?.user?.name || 'U')}</AvatarFallback>
-                            </Avatar>
-                          </TooltipTrigger>
-                          <TooltipContent side="top"><p>{auth?.user?.name || t('User')}</p></TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <div className="flex-1 rounded-xl border shadow-sm overflow-hidden">
-                        <Textarea
-                          placeholder={t('Write a comment...')}
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          className="border-0 resize-none focus-visible:ring-0 bg-transparent"
-                          rows={2}
-                        />
-                        <div className="flex items-center justify-end px-3 py-2 border-t bg-muted/30">
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button type="submit" size="sm" disabled={!newComment.trim()} className="h-7 px-3">
-                                  <Send className="h-3.5 w-3.5" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top"><p>{t('Send')}</p></TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-              )}
-              {/* Stream List */}
-              <div className="max-h-[520px] overflow-y-auto border-t">
-                {streamItems && streamItems.length > 0 ? (
-                  <div className="py-5 px-5">
-                    {streamItems.map((activity: any, index: number) => {
-                      const getActivityBadgeColor = (type: string): string => {
-                        switch (type) {
-                          case 'created': return 'bg-green-50 text-green-700 ring-green-600/20';
-                          case 'updated': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
-                          case 'deleted': return 'bg-red-50 text-red-700 ring-red-600/20';
-                          case 'assigned': return 'bg-purple-50 text-purple-700 ring-purple-600/20';
-                          case 'converted': return 'bg-orange-50 text-orange-700 ring-orange-600/20';
-                          case 'comment': return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
-                          default: return 'bg-gray-50 text-gray-700 ring-gray-600/20';
-                        }
-                      };
-                      const badgeCls = getActivityBadgeColor(activity.activity_type);
-                      const isEditing = editingComment === activity.id;
-
-                      return (
-                        <div key={activity.id || index} className="relative flex gap-3 pb-4">
-                          {/* Avatar + connector line */}
-                          <div className="flex flex-col items-center flex-shrink-0 w-9">
-                            <Avatar className="w-9 h-9 flex-shrink-0 relative z-10">
-                              <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="w-full h-full">
-                                      <AvatarImage src={activity.user?.avatar} alt={activity.user?.name || 'U'} />
-                                      <AvatarFallback className="text-xs bg-muted text-muted-foreground font-bold w-9 h-9 flex items-center justify-center rounded-full">{getInitials(activity.user?.name || 'U')}</AvatarFallback>
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top"><p>{activity.user?.name || t('System')}</p></TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </Avatar>
-                            {index < streamItems.length - 1 && (
-                              <div className="absolute left-[18px] top-9 bottom-0 w-px bg-gray-300 dark:bg-gray-600" />
-                            )}
-                          </div>
-                          {/* Card */}
-                          <div className={`flex-1 min-w-0 rounded-xl border bg-card shadow-sm overflow-hidden ${isEditing ? 'border-emerald-400 ring-1 ring-emerald-300' : ''}`}>
-                            {/* Card Header */}
-                            <div className={`flex items-center justify-between gap-2 px-4 py-2.5 ${isEditing ? 'bg-emerald-50/60' : 'bg-muted/30'} border-b`}>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-foreground">{activity.user?.name || t('System')}</span>
-                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${badgeCls}`}>
-                                  {activity.activity_type.charAt(0).toUpperCase() + activity.activity_type.slice(1)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">{formatRelativeTime(activity.created_at)}</span>
-                              </div>
-                              {!isEditing && (
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {activity.activity_type === 'comment' && activity.user_id === auth?.user?.id && hasPermission(permissions, 'edit-leads') && (
-                                    <TooltipProvider delayDuration={200}>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                            onClick={() => { setEditingComment(activity.id); setEditCommentText(activity.description); }}>
-                                            <Edit className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top"><p>{t('Edit')}</p></TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                  {hasPermission(permissions, 'delete-stream') && (
-                                    <TooltipProvider delayDuration={200}>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground"
-                                            onClick={() => { setCurrentActivity(activity); setIsDeleteModalOpen(true); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top"><p>{t('Delete')}</p></TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {/* Card Body */}
-                            <div className="px-4 py-3">
-                              {activity.activity_type === 'comment' ? (
-                                isEditing ? (
-                                  <div className="space-y-3">
-                                    <Textarea
-                                      value={editCommentText}
-                                      onChange={(e) => setEditCommentText(e.target.value)}
-                                      className="w-full resize-none border-emerald-300 focus-visible:ring-emerald-400"
-                                      rows={3}
-                                      autoFocus
-                                    />
-                                    <div className="flex items-center justify-end gap-2">
-                                      <Button size="sm" variant="outline" onClick={() => setEditingComment(null)}>{t('Cancel')}</Button>
-                                      <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => {
-                                        router.put(route('leads.comments.update-activity', { lead: lead.id, activity: activity.id }), { comment: editCommentText }, { preserveScroll: true });
-                                        setEditingComment(null);
-                                      }}>{t('Save')}</Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-foreground">{activity.description}</p>
-                                )
-                              ) : activity.field_changed === 'status' && (activity.description === 'Active' || activity.description === 'Inactive') ? (
-                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${activity.description === 'Active' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-                                  }`}>{activity.description}</span>
-                              ) : activity.field_changed === 'lead_status_id' || activity.field_changed === 'name' || activity.field_changed === 'assigned_to' || activity.description?.includes('into') ? (
-                                <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: activity.description }} />
-                              ) : activity.title ? (
-                                <p className="text-sm text-muted-foreground">{activity.title}</p>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">{activity.description}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                    <p className="text-sm">{t('No activities found')}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+            <div className="w-full lg:w-[400px] xl:w-[440px] flex-shrink-0 space-y-6">
+              <EntityJourneyTimeline
+                streamItems={streamItems || []}
+                entityType="lead"
+                entityId={lead.id}
+                entityName={lead.name}
+                recipientEmail={lead.email || lead.alternate_email || ''}
+                recipientName={lead.name}
+                leadAge={lead.lead_age}
+                leadAgeDays={lead.lead_age_days}
+                leadAgeBadge={lead.lead_age_badge}
+                canComment={hasPermission(permissions, 'create-leads')}
+                canEdit={hasPermission(permissions, 'edit-leads')}
+                canDeleteStream={hasPermission(permissions, 'delete-stream')}
+                commentStoreRoute={route('leads.comments.store', lead.id)}
+                commentUpdateActivityRoute="leads.comments.update-activity"
+                deleteActivityRoute="leads.delete-activity"
+                deleteAllActivitiesRoute="leads.delete-activities"
+              />
+            </div>
+          )}
         </div>
-      )}
-    </div>
 
-  </div>
+      </div>
 
-      {/* Delete Activity Modal */}
-      <CrudDeleteModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={() => {
-          router.delete(route('leads.delete-activity', { lead: lead.id, activity: currentActivity.id }), {
-            preserveScroll: true
-          });
-          setIsDeleteModalOpen(false);
-        }}
-        itemName={t('this activity')}
-        entityName={t('activity')}
-      />
-
-      {/* Delete All Activities Modal */}
-      <CrudDeleteModal
-        isOpen={isDeleteAllModalOpen}
-        onClose={() => setIsDeleteAllModalOpen(false)}
-        onConfirm={() => {
-          router.delete(route('leads.delete-activities', lead.id), {
-            preserveScroll: true
-          });
-          setIsDeleteAllModalOpen(false);
-        }}
-        itemName={t('all activities for {{name}}', { name: lead.name })}
-        entityName={t('activities')}
+      {/* Log Call Modal */}
+      <LogCallModal
+        isOpen={isLogCallModalOpen}
+        onClose={() => setIsLogCallModalOpen(false)}
+        parentModule="lead"
+        parentId={lead.id}
+        parentName={lead.name}
+        parentPhone={lead.phone}
+        parentEmail={lead.email}
+        users={users}
+        defaultAssigneeId={lead.assigned_to}
       />
     </PageTemplate>
   );

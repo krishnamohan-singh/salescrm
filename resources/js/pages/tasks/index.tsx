@@ -31,7 +31,9 @@ import {
     Briefcase,
     Settings,
     Tag,
-    Layers
+    Layers,
+    Eye,
+    StickyNote
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -78,6 +80,7 @@ interface Task {
     due_date: string;
     due_time?: string;
     completed_at?: string;
+    notes_count?: number;
     created_at: string;
 }
 
@@ -873,9 +876,25 @@ export default function UniversalTasksIndex() {
                                                 {/* Task Title & Description */}
                                                 <td className="px-5 py-4">
                                                     <div className="max-w-md">
-                                                        <p className={`font-semibold text-gray-900 dark:text-white ${isCompleted ? 'line-through text-gray-400 dark:text-gray-500' : ''}`}>
-                                                            {task.title}
-                                                        </p>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <Link
+                                                                href={route('tasks.show', task.id)}
+                                                                className={`font-semibold hover:text-primary transition-colors hover:underline ${
+                                                                    isCompleted ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'
+                                                                }`}
+                                                            >
+                                                                {task.title}
+                                                            </Link>
+                                                            {task.notes_count && task.notes_count > 0 ? (
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-200 dark:border-amber-800"
+                                                                    title={`${task.notes_count} ${t('notes')}`}
+                                                                >
+                                                                    <StickyNote className="h-2.5 w-2.5" />
+                                                                    {task.notes_count}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                         {task.description && (
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
                                                                 {task.description}
@@ -948,6 +967,23 @@ export default function UniversalTasksIndex() {
                                                 {/* Actions */}
                                                 <td className="px-5 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-1">
+                                                        <TooltipProvider delayDuration={200}>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Link href={route('tasks.show', task.id)}>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                                                                        >
+                                                                            <Eye className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent><p>{t('View Details')}</p></TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+
                                                         <TooltipProvider delayDuration={200}>
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
+use App\Models\TaskNote;
 use App\Models\TaskStatus;
 use App\Models\TaskType;
 use App\Models\TaskPriority;
@@ -42,6 +43,7 @@ class TaskController extends Controller
                 'taskType:id,name,icon,color',
                 'taskPriority:id,name,color,level',
             ])
+            ->withCount('notes')
             ->where('created_by', $tenantId);
 
         // Staff visibility scoping: only assigned tasks
@@ -530,5 +532,182 @@ class TaskController extends Controller
         $task->save();
 
         return redirect()->back()->with('success', __('Task status updated.'));
+    }
+
+    public function show(Task $task)
+    {
+        $user = auth()->user();
+        $tenantId = createdBy();
+        $canViewAll = hasFullModuleAccess('tasks', $user);
+
+        if ($task->created_by !== $tenantId) {
+            abort(404);
+        }
+
+        if (!$canViewAll && $task->assigned_to !== $user->id) {
+            abort(403, __('You do not have permission to view this task.'));
+        }
+
+        $task->load([
+            'lead:id,name,company,email,phone',
+            'account:id,name,email,phone',
+            'contact:id,name,email,phone',
+            'opportunity:id,name,amount',
+            'assignedUser:id,name,email,avatar',
+            'creator:id,name,email,avatar',
+            'taskStatus:id,name,color',
+            'taskType:id,name,icon,color',
+            'taskPriority:id,name,color,level',
+            'notes' => function ($q) {
+                $q->with('user:id,name,email,avatar')->orderBy('created_at', 'desc');
+            },
+        ]);
+
+        $taskStatuses = TaskStatus::where('created_by', $tenantId)
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->get();
+
+        $taskTypes = TaskType::where('created_by', $tenantId)
+            ->where('status', 'active')
+            ->orderBy('id')
+            ->get();
+
+        $taskPriorities = TaskPriority::where('created_by', $tenantId)
+            ->where('status', 'active')
+            ->orderBy('level')
+            ->get();
+
+        $leads = Lead::where('created_by', $tenantId)->select('id', 'name', 'company')->orderBy('name')->get();
+        $accounts = Account::where('created_by', $tenantId)->select('id', 'name')->orderBy('name')->get();
+        $contacts = Contact::where('created_by', $tenantId)->select('id', 'name', 'email')->orderBy('name')->get();
+        $opportunities = Opportunity::where('created_by', $tenantId)->select('id', 'name')->orderBy('name')->get();
+        $users = User::where('created_by', $tenantId)->where('status', 'active')->select('id', 'name', 'email', 'avatar')->orderBy('name')->get();
+
+        return Inertia::render('tasks/show', [
+            'task' => $task,
+            'taskStatuses' => $taskStatuses,
+            'taskTypes' => $taskTypes,
+            'taskPriorities' => $taskPriorities,
+            'leads' => $leads,
+            'accounts' => $accounts,
+            'contacts' => $contacts,
+            'opportunities' => $opportunities,
+            'users' => $users,
+            'canEdit' => $canViewAll || $task->assigned_to === $user->id || $task->created_by === $user->id,
+            'canDelete' => $canViewAll || $task->created_by === $user->id,
+        ]);
+    }
+
+    public function storeNote(Request $request, Task $task)
+    {
+        $tenantId = createdBy();
+        if ($task->created_by !== $tenantId) {
+            abort(404);
+        }
+
+        $user = auth()->user();
+        $canViewAll = hasFullModuleAccess('tasks', $user);
+        if (!$canViewAll && $task->assigned_to !== $user->id) {
+            abort(403, __('You do not have permission to add notes to this task.'));
+        }
+
+        $validated = $request->validate([
+            'note' => 'required|string|max:10000',
+        ]);
+
+        $task->notes()->create([
+            'user_id' => $user->id,
+            'created_by' => $tenantId,
+            'note' => $validated['note'],
+        ]);
+
+        try {
+            $userName = $user->name;
+            $title = $userName . ' added a note to task: ' . $task->title;
+            if (!empty($task->lead_id)) {
+                \App\Models\LeadActivity::create([
+                    'lead_id' => $task->lead_id,
+                    'user_id' => $user->id,
+                    'activity_type' => 'comment',
+                    'title' => $title,
+                    'description' => $validated['note'],
+                    'created_by' => $tenantId,
+                ]);
+            } elseif (!empty($task->account_id)) {
+                \App\Models\AccountActivity::create([
+                    'account_id' => $task->account_id,
+                    'user_id' => $user->id,
+                    'activity_type' => 'comment',
+                    'title' => $title,
+                    'description' => $validated['note'],
+                    'created_by' => $tenantId,
+                ]);
+            } elseif (!empty($task->opportunity_id)) {
+                \App\Models\OpportunityActivity::create([
+                    'opportunity_id' => $task->opportunity_id,
+                    'user_id' => $user->id,
+                    'activity_type' => 'comment',
+                    'title' => $title,
+                    'description' => $validated['note'],
+                    'created_by' => $tenantId,
+                ]);
+            } elseif (!empty($task->contact_id)) {
+                \App\Models\ContactActivity::create([
+                    'contact_id' => $task->contact_id,
+                    'user_id' => $user->id,
+                    'activity_type' => 'comment',
+                    'title' => $title,
+                    'description' => $validated['note'],
+                    'created_by' => $tenantId,
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Silently ignore activity logging failure
+        }
+
+        return redirect()->back()->with('success', __('Note added successfully.'));
+    }
+
+    public function updateNote(Request $request, Task $task, TaskNote $note)
+    {
+        $tenantId = createdBy();
+        if ($task->created_by !== $tenantId || $note->task_id !== $task->id || $note->created_by !== $tenantId) {
+            abort(404);
+        }
+
+        $user = auth()->user();
+        $canViewAll = hasFullModuleAccess('tasks', $user);
+        if (!$canViewAll && $note->user_id !== $user->id) {
+            abort(403, __('You do not have permission to edit this note.'));
+        }
+
+        $validated = $request->validate([
+            'note' => 'required|string|max:10000',
+        ]);
+
+        $note->update([
+            'note' => $validated['note'],
+        ]);
+
+        return redirect()->back()->with('success', __('Note updated successfully.'));
+    }
+
+    public function destroyNote(Task $task, TaskNote $note)
+    {
+        $tenantId = createdBy();
+        if ($task->created_by !== $tenantId || $note->task_id !== $task->id || $note->created_by !== $tenantId) {
+            abort(404);
+        }
+
+        $user = auth()->user();
+        $canViewAll = hasFullModuleAccess('tasks', $user);
+        if (!$canViewAll && $note->user_id !== $user->id) {
+            abort(403, __('You do not have permission to delete this note.'));
+        }
+
+        $note->delete();
+
+        return redirect()->back()->with('success', __('Note deleted successfully.'));
     }
 }

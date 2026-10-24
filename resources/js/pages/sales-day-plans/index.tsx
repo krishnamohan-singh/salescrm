@@ -99,6 +99,7 @@ export default function SalesDayPlansIndex() {
 
     const [sendEmailItem, setSendEmailItem] = useState<SalesDayPlanItem | null>(null);
     const [recipientEmail, setRecipientEmail] = useState('');
+    const [ccEmails, setCcEmails] = useState('');
     const [isSendingEmail, setIsSendingEmail] = useState(false);
 
     const [reviewItem, setReviewItem] = useState<SalesDayPlanItem | null>(null);
@@ -162,10 +163,12 @@ export default function SalesDayPlansIndex() {
         setIsSendingEmail(true);
         router.post(route('sales-day-plans.send-report', sendEmailItem.id), {
             recipient_email: recipientEmail || undefined,
+            cc_emails: ccEmails || undefined,
         }, {
             onSuccess: () => {
                 setSendEmailItem(null);
                 setRecipientEmail('');
+                setCcEmails('');
                 setIsSendingEmail(false);
                 toast.success(t('Daily Sales Report email sent successfully!'));
             },
@@ -672,7 +675,8 @@ export default function SalesDayPlansIndex() {
                                                                 <DropdownMenuItem
                                                                     onClick={() => {
                                                                         setSendEmailItem(plan);
-                                                                        setRecipientEmail('');
+                                                                        setRecipientEmail(plan.user?.email || '');
+                                                                        setCcEmails('');
                                                                     }}
                                                                 >
                                                                     <Send className="h-4 w-4 mr-2 text-emerald-600" />
@@ -876,23 +880,43 @@ export default function SalesDayPlansIndex() {
 
                     <form onSubmit={handleSendReport} className="space-y-4 py-2">
                         <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-1">
-                            <div><strong className="text-foreground">{t('Sales Rep')}:</strong> {sendEmailItem?.user?.name}</div>
+                            <div><strong className="text-foreground">{t('Sales Rep (User)')}:</strong> {sendEmailItem?.user?.name} {sendEmailItem?.user?.email && `(${sendEmailItem.user.email})`}</div>
                             <div><strong className="text-foreground">{t('Date')}:</strong> {sendEmailItem?.plan_date}</div>
                             <div><strong className="text-foreground">{t('Achievement')}:</strong> {sendEmailItem?.completion_rate}%</div>
                         </div>
 
                         <div className="space-y-1.5">
                             <Label htmlFor="recipientEmail" className="text-xs font-semibold">
-                                {t('Recipient Email')} <span className="text-muted-foreground font-normal">({t('leave blank for company default')})</span>
+                                {t('Recipient Email (User)')}
                             </Label>
                             <Input
                                 id="recipientEmail"
                                 type="email"
-                                placeholder={t('manager@example.com')}
+                                placeholder={sendEmailItem?.user?.email || t('user@example.com')}
                                 value={recipientEmail}
                                 onChange={(e) => setRecipientEmail(e.target.value)}
                                 className="text-xs"
                             />
+                            <p className="text-[11px] text-muted-foreground">
+                                {t('Report will be delivered directly to the user.')}
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="ccEmails" className="text-xs font-semibold">
+                                {t('CC (Managers & Leadership)')}
+                            </Label>
+                            <Input
+                                id="ccEmails"
+                                type="text"
+                                placeholder={t('manager@example.com, admin@example.com')}
+                                value={ccEmails}
+                                onChange={(e) => setCcEmails(e.target.value)}
+                                className="text-xs"
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                                {t('Assigned managers and company admin are automatically kept in CC. You can add extra emails separated by commas.')}
+                            </p>
                         </div>
 
                         <DialogFooter className="pt-2">

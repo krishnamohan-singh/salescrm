@@ -268,6 +268,27 @@ class MeetingController extends Controller
                         'created_by' => createdBy()
                     ]);
                     break;
+                case 'contact':
+                    \App\Models\ContactActivity::create([
+                        'contact_id' => $meeting->parent_id,
+                        'user_id' => auth()->id(),
+                        'activity_type' => 'Meeting Created',
+                        'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title,
+                        'description' => 'Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ' at ' . date('g:i A', strtotime($meeting->start_time)),
+                        'created_by' => createdBy()
+                    ]);
+                    $contact = \App\Models\Contact::find($meeting->parent_id);
+                    if ($contact && $contact->account_id) {
+                        \App\Models\AccountActivity::create([
+                            'account_id' => $contact->account_id,
+                            'user_id' => auth()->id(),
+                            'activity_type' => 'Meeting Created',
+                            'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title . ' (Contact: ' . $contact->name . ')',
+                            'description' => 'Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ' at ' . date('g:i A', strtotime($meeting->start_time)),
+                            'created_by' => createdBy()
+                        ]);
+                    }
+                    break;
             }
         }
 
@@ -277,15 +298,25 @@ class MeetingController extends Controller
                 switch ($attendee['type']) {
                     case 'contact':
                         $contact = \App\Models\Contact::find($attendee['id']);
-                        if ($contact && $contact->account_id) {
-                            \App\Models\AccountActivity::create([
-                                'account_id' => $contact->account_id,
+                        if ($contact) {
+                            \App\Models\ContactActivity::create([
+                                'contact_id' => $contact->id,
                                 'user_id' => auth()->id(),
                                 'activity_type' => 'Meeting Attendee',
-                                'title' => auth()->user()->name . ' added ' . $contact->name . ' to meeting: ' . $meeting->title,
+                                'title' => auth()->user()->name . ' added contact to meeting: ' . $meeting->title,
                                 'description' => 'Contact added as attendee to meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)),
                                 'created_by' => createdBy()
                             ]);
+                            if ($contact->account_id) {
+                                \App\Models\AccountActivity::create([
+                                    'account_id' => $contact->account_id,
+                                    'user_id' => auth()->id(),
+                                    'activity_type' => 'Meeting Attendee',
+                                    'title' => auth()->user()->name . ' added ' . $contact->name . ' to meeting: ' . $meeting->title,
+                                    'description' => 'Contact added as attendee to meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)),
+                                    'created_by' => createdBy()
+                                ]);
+                            }
                         }
                         break;
                     case 'lead':

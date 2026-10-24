@@ -420,13 +420,14 @@ class SalesDayPlanController extends Controller
     public function sendReport(Request $request, $id)
     {
         $tenantId = createdBy();
-        $dayPlan = SalesDayPlan::with(['user', 'creator'])->where('created_by', $tenantId)->findOrFail($id);
+        $dayPlan = SalesDayPlan::with(['user', 'creator', 'reviewer'])->where('created_by', $tenantId)->findOrFail($id);
 
         $recipientEmail = $request->input('recipient_email');
-        $success = $this->dispatchReportEmail($dayPlan, $recipientEmail);
+        $ccEmails = $request->input('cc_emails');
+        $success = $this->dispatchReportEmail($dayPlan, $recipientEmail, $ccEmails);
 
         if ($success) {
-            return redirect()->back()->with('success', __('Daily Report emailed successfully.'));
+            return redirect()->back()->with('success', __('Daily Report emailed to user and CC\'d to manager(s) successfully.'));
         }
 
         return redirect()->back()->with('error', __('Could not send email. Please check mail settings.'));
@@ -542,23 +543,101 @@ class SalesDayPlanController extends Controller
         }
     }
 
-    private function dispatchReportEmail(SalesDayPlan $dayPlan, ?string $overrideEmail = null): bool
+    /**
+     * Resolve manager & leadership emails to CC on daily report.
+     *
+     * @param SalesDayPlan $dayPlan
+     * @param string|null $excludeEmail
+     * @param array|string|null $customCc
+     * @return array
+     */
+    private function resolveManagerEmails(SalesDayPlan $dayPlan, ?string $excludeEmail = null, $customCc = null): array
     {
-        $tenantId = createdBy();
-        $company = User::find($tenantId);
+        $tenantId = $dayPlan->created_by ?: createdBy();
+        $managerEmails = [];
 
-        $targetEmail = $overrideEmail ?: ($company->email ?? null);
+        // 1. Plan reviewer / approver if assigned
+        if ($dayPlan->reviewer && !empty($dayPlan->reviewer->email)) {
+            $managerEmails[] = $dayPlan->reviewer->email;
+        }
+
+        // 2. Sales managers and team leads in this tenant
+        $managers = User::where('created_by', $tenantId)
+            ->where(function ($q) {
+                $q->whereIn('type', ['sales-manager', 'manager', 'admin', 'company'])
+                  ->orWhereHas('roles', function ($rq) {
+                      $rq->whereIn('name', ['sales-manager', 'manager', 'sales manager', 'Team Lead', 'Sales Director', 'Director']);
+                  });
+            })
+            ->pluck('email')
+            ->filter()
+            ->toArray();
+
+        $managerEmails = array_merge($managerEmails, $managers);
+
+        // 3. Company Admin Account
+        $company = User::find($tenantId);
+        if ($company && !empty($company->email)) {
+            $managerEmails[] = $company->email;
+        }
+
+        // 4. Custom CC passed in request
+        if (!empty($customCc)) {
+            if (is_array($customCc)) {
+                $managerEmails = array_merge($managerEmails, $customCc);
+            } else {
+                $managerEmails = array_merge($managerEmails, array_map('trim', explode(',', $customCc)));
+            }
+        }
+
+        // Clean, validate, and exclude recipient
+        $normalizedExclude = strtolower(trim((string) $excludeEmail));
+        return array_values(array_unique(array_filter($managerEmails, function ($email) use ($normalizedExclude) {
+            $clean = strtolower(trim($email));
+            return filter_var($clean, FILTER_VALIDATE_EMAIL) && $clean !== $normalizedExclude;
+        })));
+    }
+
+    private function dispatchReportEmail(SalesDayPlan $dayPlan, ?string $overrideEmail = null, $customCc = null): bool
+    {
+        $dayPlan->loadMissing(['user', 'creator', 'reviewer']);
+
+        // 1. Primary Recipient: The user (sales representative) whose daily report it is
+        $targetEmail = $overrideEmail ?: ($dayPlan->user?->email ?? null);
+
+        // Fallback to company email only if user has no email configured
         if (!$targetEmail) {
+            $tenantId = $dayPlan->created_by ?: createdBy();
+            $company = User::find($tenantId);
+            $targetEmail = $company->email ?? null;
+        }
+
+        if (!$targetEmail || !filter_var($targetEmail, FILTER_VALIDATE_EMAIL)) {
+            \Log::warning("SalesDailyReportMail: No valid primary recipient email for plan ID {$dayPlan->id}");
             return false;
         }
 
+        // 2. Keep manager(s) in CC
+        $managerCcEmails = $this->resolveManagerEmails($dayPlan, $targetEmail, $customCc);
+
         try {
-            Mail::to($targetEmail)->send(new SalesDailyReportMail($dayPlan));
+            $mail = Mail::to($targetEmail);
+            if (!empty($managerCcEmails)) {
+                $mail->cc($managerCcEmails);
+            }
+            $mail->send(new SalesDailyReportMail($dayPlan, null, $managerCcEmails));
+
+            $sentSummary = $targetEmail;
+            if (!empty($managerCcEmails)) {
+                $sentSummary .= ' [CC: ' . implode(', ', $managerCcEmails) . ']';
+            }
+
             $dayPlan->update([
                 'report_sent_at' => now(),
-                'report_sent_to' => $targetEmail,
+                'report_sent_to' => \Illuminate\Support\Str::limit($sentSummary, 250),
                 'status' => in_array($dayPlan->status, ['draft', 'in_progress']) ? 'submitted' : $dayPlan->status,
             ]);
+
             return true;
         } catch (\Exception $e) {
             \Log::error("SalesDailyReportMail error: " . $e->getMessage());

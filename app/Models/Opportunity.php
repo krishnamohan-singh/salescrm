@@ -64,7 +64,14 @@ class Opportunity extends BaseModel
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'opportunity_products')
-            ->withPivot('quantity', 'unit_price', 'total_price')
+            ->withPivot('id', 'quantity', 'unit_price', 'total_price', 'notes')
+            ->withTimestamps();
+    }
+
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'opportunity_services')
+            ->withPivot('id', 'quantity', 'unit_price', 'total_price', 'notes')
             ->withTimestamps();
     }
 
@@ -106,5 +113,10 @@ class Opportunity extends BaseModel
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'opportunity_id')->with(['assignedUser', 'creator', 'taskStatus', 'taskType', 'taskPriority'])->orderBy('due_date', 'asc');
+    }
+
+    public function emails(): HasMany
+    {
+        return $this->hasMany(CrmEmail::class)->orderBy('sent_at', 'desc');
     }
 }

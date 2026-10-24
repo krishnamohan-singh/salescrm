@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
-import { ArrowLeft, User, Mail, Phone, MapPin, Building, Briefcase, FileText, Calendar, Clock, UserCheck, Eye, Tag } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, PhoneCall, Plus, MapPin, Building, Briefcase, FileText, Calendar, Clock, UserCheck, Eye, Tag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,15 @@ import UserInitials from '@/components/user-initials';
 import { useInitials } from '@/hooks/use-initials';
 import { hasPermission } from '@/utils/authorization';
 import { EntityTasksCard } from '@/components/entity-tasks-card';
+import { LogCallModal } from '@/components/log-call-modal';
+import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
 
 export default function ContactShow() {
     const { t } = useTranslation();
-    const { contact, meetings, auth, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [] } = usePage().props as any;
+    const { contact, meetings, streamItems = [], auth, tasks = [], users = [], taskStatuses = [], taskTypes = [], taskPriorities = [] } = usePage().props as any;
     const permissions = auth?.permissions || [];
     const getInitials = useInitials();
+    const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
 
     const filteredMeetings = useMemo(() => meetings?.filter((m: any) => m.type !== 'call') || [], [meetings]);
     const filteredCalls = useMemo(() => meetings?.filter((m: any) => m.type === 'call') || [], [meetings]);
@@ -51,10 +54,16 @@ export default function ContactShow() {
             description={t('Contact details and related information')}
             breadcrumbs={breadcrumbs}
             actions={[
+                ...(hasPermission(permissions, 'create-calls') ? [{
+                    label: t('Log Call'),
+                    icon: <PhoneCall className="h-4 w-4 mr-2" />,
+                    variant: 'outline' as const,
+                    onClick: () => setIsLogCallModalOpen(true)
+                }] : []),
                 {
                     label: t('Back'),
                     icon: <ArrowLeft className="h-4 w-4 mr-2" />,
-                    variant: 'outline',
+                    variant: 'outline' as const,
                     onClick: () => router.visit(route('contacts.index'))
                 }
             ]}
@@ -87,139 +96,155 @@ export default function ContactShow() {
                     ))}
                 </div>
 
-                {/* Contact Summary + Contact Info */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Main Content Layout */}
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                    {/* Left Column: Contact Details, Tasks, Meetings */}
+                    <div className="flex-1 min-w-0 space-y-6">
+                        {/* Unified Card: Contact Details */}
+                        <Card className="shadow-sm">
+                            <CardHeader className="border-b py-3.5 px-6">
+                                <CardTitle className="flex items-center text-lg font-semibold">
+                                    <User className="h-5 w-5 mr-3 text-muted-foreground" />
+                                    {t('Contact Details')}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 space-y-6">
+                                {/* Section 1: Contact Information */}
+                                <div>
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                                        {t('Contact Information')}
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
+                                            <div>{getStatusBadge(contact.status)}</div>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Position')}</p>
+                                            <p className="text-sm font-medium text-foreground">{contact.position || '—'}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Related Account')}</p>
+                                            <p className="text-sm font-medium text-foreground truncate">{contact.account?.name || '—'}</p>
+                                        </div>
+                                    </div>
 
-                    {/* Contact Summary */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <FileText className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Contact Summary')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Status')}</p>
-                                    <div>{getStatusBadge(contact.status)}</div>
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Position')}</p>
-                                    <p className="text-sm font-medium text-foreground">{contact.position || '—'}</p>
-                                </div>
-                            </div>
-                            <div className="pt-4 mt-4 border-t border-border">
-                                <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
-                                {contact.assigned_user ? (
-                                    <div className="flex items-center gap-2">
-                                        <Avatar className="w-7 h-7 flex-shrink-0">
-                                            <AvatarImage src={contact.assigned_user.avatar} alt={contact.assigned_user.name} />
-                                            <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(contact.assigned_user.name || '')}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{contact.assigned_user.name}</p>
-                                            {contact.assigned_user.email && (
-                                                <p className="text-xs text-muted-foreground truncate">{contact.assigned_user.email}</p>
+                                    {/* Assigned To + Created By */}
+                                    <div className="pt-4 mt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Assigned To')}</p>
+                                            {contact.assigned_user ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-7 h-7 flex-shrink-0">
+                                                        <AvatarImage src={contact.assigned_user.avatar} alt={contact.assigned_user.name} />
+                                                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(contact.assigned_user.name || '')}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium text-foreground truncate">{contact.assigned_user.name}</p>
+                                                        {contact.assigned_user.email && (
+                                                            <p className="text-xs text-muted-foreground truncate">{contact.assigned_user.email}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('Created By')}</p>
+                                            {contact.creator ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="w-7 h-7 flex-shrink-0">
+                                                        <AvatarImage src={contact.creator.avatar} alt={contact.creator.name} />
+                                                        <AvatarFallback className="bg-primary/15 text-primary text-xs font-bold">{getInitials(contact.creator.name || '')}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium text-foreground truncate">{contact.creator.name}</p>
+                                                        {contact.creator.email && (
+                                                            <p className="text-xs text-muted-foreground truncate">{contact.creator.email}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">{t('Unknown')}</p>
                                             )}
                                         </div>
                                     </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">{t('Unassigned')}</p>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Contact Info */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <User className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Contact Info')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
-                                    <p className="text-sm font-medium text-foreground truncate">{contact.email || '—'}</p>
                                 </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium text-muted-foreground">{t('Phone')}</p>
-                                    <p className="text-sm font-medium text-foreground">{contact.phone || '—'}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
 
-                {/* Address + Related Account */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                    {/* Address */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <MapPin className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Address')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5">
-                            <div className="h-[100px] overflow-y-auto">
-                                {contact.address ? (
-                                    <p className="text-sm  text-foreground">{contact.address}</p>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-full text-center">
-                                        <MapPin className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                                        <p className="text-sm text-muted-foreground">{t('No address')}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Related Account */}
-                    <Card className="shadow-sm">
-                        <CardHeader className="border-b py-3.5 px-5">
-                            <CardTitle className="flex items-center text-lg font-semibold">
-                                <Building className="h-5 w-5 mr-3 text-muted-foreground" />
-                                {t('Related Account')}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-5 flex items-center justify-center" style={{ minHeight: '130px' }}>
-                            {contact.account ? (
-                                <div className="flex items-center justify-between p-3.5 rounded-xl border hover:bg-muted/40 transition-colors w-full">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                        <UserInitials name={contact.account.name} />
-                                        <div className="min-w-0">
-                                            <p className="text-xs font-medium text-muted-foreground">{t('Account')}</p>
-                                            <p className="text-sm font-semibold text-foreground truncate">{contact.account.name}</p>
-                                            {contact.account.email && <p className="text-xs text-muted-foreground truncate">{contact.account.email}</p>}
+                                {/* Section 2: Contact Info */}
+                                <div className="pt-6 border-t border-border">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                                        <User className="h-3.5 w-3.5" />
+                                        {t('Contact & Communication')}
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="space-y-0.5 min-w-0">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
+                                            <p className="text-sm font-medium text-foreground break-all">{contact.email || '—'}</p>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium text-muted-foreground">{t('Phone')}</p>
+                                            <p className="text-sm font-medium text-foreground">{contact.phone || '—'}</p>
                                         </div>
                                     </div>
-                                    {hasPermission(permissions, 'view-accounts') && (
-                                        <TooltipProvider delayDuration={200}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Link href={route('accounts.show', contact.account.id)} className="ml-3 flex-shrink-0">
-                                                        <Eye className="h-4 w-4 text-gray-500" />
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    )}
                                 </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center text-center py-8">
-                                    <Building className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                                    <p className="text-sm text-muted-foreground">{t('No account linked')}</p>
+
+                                {/* Section 3: Address & Related Account */}
+                                <div className="pt-6 border-t border-border">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                        {/* Address */}
+                                        <div className="p-4 rounded-xl border border-border bg-muted/20 min-h-[110px]">
+                                            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                                <MapPin className="h-3.5 w-3.5" />
+                                                {t('Address')}
+                                            </p>
+                                            {contact.address ? (
+                                                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{contact.address}</p>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center py-4 text-center">
+                                                    <MapPin className="h-6 w-6 text-muted-foreground/30 mb-1" />
+                                                    <p className="text-xs text-muted-foreground">{t('No address provided')}</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Related Account */}
+                                        <div className="p-4 rounded-xl border border-border bg-muted/20 min-h-[110px] flex items-center">
+                                            {contact.account ? (
+                                                <div className="flex items-center justify-between w-full">
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <UserInitials name={contact.account.name} />
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-medium text-muted-foreground">{t('Related Account')}</p>
+                                                            <p className="text-sm font-semibold text-foreground truncate">{contact.account.name}</p>
+                                                            {contact.account.email && <p className="text-xs text-muted-foreground truncate">{contact.account.email}</p>}
+                                                        </div>
+                                                    </div>
+                                                    {hasPermission(permissions, 'view-accounts') && (
+                                                        <TooltipProvider delayDuration={200}>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Link href={route('accounts.show', contact.account.id)} className="ml-3 flex-shrink-0">
+                                                                        <Eye className="h-4 w-4 text-gray-500" />
+                                                                    </Link>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="top"><p>{t('View')}</p></TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center w-full text-center py-4">
+                                                    <Building className="h-6 w-6 text-muted-foreground/30 mb-1" />
+                                                    <p className="text-xs text-muted-foreground">{t('No account linked')}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
+                            </CardContent>
+                        </Card>
 
                 {/* Quotes + Cases */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -404,7 +429,20 @@ export default function ContactShow() {
                                         <CardHeader className="border-b py-3 px-4">
                                             <CardTitle className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
                                                 <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" />{t('Calls')}</div>
-                                                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{filteredCalls.length}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{filteredCalls.length}</span>
+                                                    {hasPermission(permissions, 'create-calls') && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 px-2 text-xs flex items-center gap-1"
+                                                            onClick={() => setIsLogCallModalOpen(true)}
+                                                        >
+                                                            <Plus className="h-3 w-3" />
+                                                            {t('Log Call')}
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="p-0">
@@ -460,7 +498,44 @@ export default function ContactShow() {
                     );
                 })()}
 
+                    </div>{/* End Left Column */}
+
+                    {/* Right Column: Journey & Activity Timeline */}
+                    {hasPermission(permissions, 'view-stream') && (
+                        <div className="w-full lg:w-[400px] xl:w-[440px] flex-shrink-0 space-y-6">
+                            <EntityJourneyTimeline
+                                streamItems={streamItems || []}
+                                entityType="contact"
+                                entityId={contact.id}
+                                entityName={contact.name}
+                                recipientEmail={contact.email || ''}
+                                recipientName={contact.name}
+                                canComment={hasPermission(permissions, 'create-contacts')}
+                                canEdit={hasPermission(permissions, 'edit-contacts')}
+                                canDeleteStream={hasPermission(permissions, 'delete-stream')}
+                                commentStoreRoute={route('contacts.comments.store', contact.id)}
+                                commentUpdateActivityRoute="contacts.comments.update-activity"
+                                deleteActivityRoute="contacts.delete-activity"
+                                deleteAllActivitiesRoute="contacts.delete-activities"
+                            />
+                        </div>
+                    )}
+                </div>{/* End Main Content Layout */}
+
             </div>
+
+            {/* Log Call Modal */}
+            <LogCallModal
+                isOpen={isLogCallModalOpen}
+                onClose={() => setIsLogCallModalOpen(false)}
+                parentModule="contact"
+                parentId={contact.id}
+                parentName={contact.name}
+                parentPhone={contact.phone}
+                parentEmail={contact.email}
+                users={users}
+                defaultAssigneeId={contact.assigned_to}
+            />
         </PageTemplate>
     );
 }

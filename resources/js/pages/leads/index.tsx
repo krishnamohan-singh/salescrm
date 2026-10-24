@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote, Cable } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote, Cable, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { hasPermission } from '@/utils/authorization';
@@ -533,6 +534,25 @@ export default function Leads() {
             )
         },
         {
+            key: 'lead_age',
+            label: t('Lead Age'),
+            render: (_: any, row: any) => {
+                const badge = row.lead_age_badge || 'fresh';
+                const ageText = row.lead_age || t('Just now');
+                const badgeColors: Record<string, string> = {
+                    fresh: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+                    warm: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+                    aging: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
+                };
+                return (
+                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium border ${badgeColors[badge] || badgeColors.fresh}`}>
+                        <Clock className="h-3 w-3" />
+                        {ageText}
+                    </span>
+                );
+            }
+        },
+        {
             key: 'created_at',
             label: t('Created At'),
             sortable: true,
@@ -988,13 +1008,31 @@ export default function Leads() {
                                                             </div>
                                                         )}
 
-                                                        {/* Footer: date + assigned avatar */}
+                                                        {/* Footer: date + lead age + assigned avatar */}
                                                         <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                                <LucidIcons.Calendar className="h-3 w-3" />
-                                                                <span>
-                                                                    {window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString()}
-                                                                </span>
+                                                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-500">
+                                                                <div className="flex items-center gap-1">
+                                                                    <LucidIcons.Calendar className="h-3 w-3" />
+                                                                    <span>
+                                                                        {window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString()}
+                                                                    </span>
+                                                                </div>
+                                                                {lead.lead_age && (
+                                                                    <span
+                                                                        className={cn(
+                                                                            "inline-flex items-center gap-1 rounded px-1.5 py-0.2 text-[10px] font-medium border",
+                                                                            lead.lead_age_badge === 'aging'
+                                                                                ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+                                                                                : lead.lead_age_badge === 'warm'
+                                                                                ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                                                                                : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                                                                        )}
+                                                                        title={t('Lead Age')}
+                                                                    >
+                                                                        <Clock className="h-2.5 w-2.5" />
+                                                                        {lead.lead_age}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             {lead.assigned_user ? (
                                                                 <TooltipProvider>

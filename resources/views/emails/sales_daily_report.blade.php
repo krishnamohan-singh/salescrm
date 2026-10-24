@@ -80,9 +80,12 @@
             <h2 style="margin: 0 0 5px 0; color: #0f172a; font-size: 20px;">
                 {{ $dayPlan->user->name ?? 'Sales Representative' }}
             </h2>
-            <p style="margin: 0; color: #64748b; font-size: 13px;">
-                <strong>Date:</strong> {{ $dayPlan->plan_date ? $dayPlan->plan_date->format('l, F d, Y') : date('l, F d, Y') }} | 
-                <strong>Email:</strong> {{ $dayPlan->user->email ?? '-' }}
+            <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
+                <strong>Date:</strong> {{ $dayPlan->plan_date ? $dayPlan->plan_date->format('l, F d, Y') : date('l, F d, Y') }}<br>
+                <strong>Recipient (User):</strong> {{ $dayPlan->user->name ?? 'User' }} &lt;{{ $dayPlan->user->email ?? '-' }}&gt;
+                @if(!empty($managerCcList))
+                    <br><strong>Manager CC:</strong> {{ implode(', ', $managerCcList) }}
+                @endif
             </p>
         </div>
         <div style="text-align: right; margin-top: 10px;">

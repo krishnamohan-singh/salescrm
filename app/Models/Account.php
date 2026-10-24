@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Account extends BaseModel
@@ -102,5 +103,24 @@ class Account extends BaseModel
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'account_id')->with(['assignedUser', 'creator', 'taskStatus', 'taskType', 'taskPriority'])->orderBy('due_date', 'asc');
+    }
+
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'account_services')
+            ->withPivot('id', 'price', 'status', 'start_date', 'end_date', 'notes')
+            ->withTimestamps();
+    }
+
+    public function products(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'account_products')
+            ->withPivot('id', 'quantity', 'unit_price', 'total_price', 'status', 'notes')
+            ->withTimestamps();
+    }
+
+    public function emails(): HasMany
+    {
+        return $this->hasMany(CrmEmail::class)->orderBy('sent_at', 'desc');
     }
 }

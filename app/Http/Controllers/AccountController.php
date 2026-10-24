@@ -244,19 +244,157 @@ class AccountController extends Controller
             $taskTypes = \App\Models\TaskType::where('created_by', $tenantId)->where('status', 'active')->orderBy('id')->get();
             $taskPriorities = \App\Models\TaskPriority::where('created_by', $tenantId)->where('status', 'active')->orderBy('level')->get();
 
+            $account->load(['services.category', 'services.tax', 'products.category', 'products.tax']);
+
+            $activeServices = \App\Models\Service::where('created_by', $tenantId)
+                ->where('status', 'active')
+                ->select('id', 'name', 'code', 'price', 'billing_cycle')
+                ->orderBy('name')
+                ->get();
+
+            $activeProducts = \App\Models\Product::where('created_by', $tenantId)
+                ->where('status', true)
+                ->select('id', 'name', 'sku', 'price', 'category_id', 'tax_id')
+                ->with(['category:id,name', 'tax:id,name,rate'])
+                ->orderBy('name')
+                ->get();
+
             return Inertia::render('accounts/show', [
                 'account'        => $account,
-                'streamItems'    => $account->activities()->orderBy('id', 'desc')->get(),
+                'streamItems'    => $account->activities()->with('user:id,name,avatar')->orderBy('created_at', 'asc')->get(),
                 'meetings'       => $meetings,
                 'tasks'          => $tasks,
                 'users'          => $users,
                 'taskStatuses'   => $taskStatuses,
                 'taskTypes'      => $taskTypes,
                 'taskPriorities' => $taskPriorities,
+                'activeServices' => $activeServices,
+                'activeProducts' => $activeProducts,
             ]);
         } else {
             return redirect()->route('accounts.index')->with('error', __('Account not found.'));
         }
+    }
+
+    public function attachService(Request $request, $id)
+    {
+        $account = Account::where('id', $id)->where('created_by', createdBy())->firstOrFail();
+
+        $validated = $request->validate([
+            'service_id' => 'required|exists:services,id',
+            'price' => 'nullable|numeric|min:0',
+            'status' => 'nullable|in:active,pending,suspended,cancelled,completed',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $service = \App\Models\Service::findOrFail($validated['service_id']);
+        $price = $validated['price'] ?? $service->price;
+
+        $account->services()->syncWithoutDetaching([
+            $service->id => [
+                'price' => $price,
+                'status' => $validated['status'] ?? 'active',
+                'start_date' => $validated['start_date'] ?? null,
+                'end_date' => $validated['end_date'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => createdBy(),
+            ]
+        ]);
+
+        \App\Models\AccountActivity::create([
+            'account_id' => $account->id,
+            'user_id' => auth()->id(),
+            'activity_type' => 'Service Mapped',
+            'title' => auth()->user()->name . ' mapped service: ' . $service->name,
+            'description' => 'Contracted/associated service ' . $service->name . ' (' . ($service->code ?? '') . ') at ' . ($price ? '$' . number_format($price, 2) : 'standard rate') . ($validated['notes'] ? "\nNotes: " . $validated['notes'] : ''),
+            'created_by' => createdBy()
+        ]);
+
+        return redirect()->back()->with('success', __('Service mapped to account successfully.'));
+    }
+
+    public function detachService($id, $serviceId)
+    {
+        $account = Account::where('id', $id)->where('created_by', createdBy())->firstOrFail();
+        $service = \App\Models\Service::find($serviceId);
+
+        $account->services()->detach($serviceId);
+
+        if ($service) {
+            \App\Models\AccountActivity::create([
+                'account_id' => $account->id,
+                'user_id' => auth()->id(),
+                'activity_type' => 'Service Removed',
+                'title' => auth()->user()->name . ' removed mapped service: ' . $service->name,
+                'description' => 'Removed service association ' . $service->name,
+                'created_by' => createdBy()
+            ]);
+        }
+
+        return redirect()->back()->with('success', __('Service removed from account.'));
+    }
+
+    public function attachProduct(Request $request, $id)
+    {
+        $account = Account::where('id', $id)->where('created_by', createdBy())->firstOrFail();
+
+        $validated = $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'nullable|integer|min:1',
+            'unit_price' => 'nullable|numeric|min:0',
+            'status' => 'nullable|string|in:active,delivered,pending,cancelled',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $product = \App\Models\Product::findOrFail($validated['product_id']);
+        $quantity = max(1, (int) ($validated['quantity'] ?? 1));
+        $unitPrice = isset($validated['unit_price']) && $validated['unit_price'] !== '' ? (float) $validated['unit_price'] : (float) $product->price;
+        $totalPrice = $quantity * $unitPrice;
+
+        $account->products()->syncWithoutDetaching([
+            $product->id => [
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total_price' => $totalPrice,
+                'status' => $validated['status'] ?? 'active',
+                'notes' => $validated['notes'] ?? null,
+                'created_by' => createdBy(),
+            ]
+        ]);
+
+        \App\Models\AccountActivity::create([
+            'account_id' => $account->id,
+            'user_id' => auth()->id(),
+            'activity_type' => 'Product Tagged',
+            'title' => auth()->user()->name . ' tagged product: ' . $product->name,
+            'description' => "Tagged product {$product->name} (Qty: {$quantity}, Unit Price: " . (function_exists('currency_symbol') ? currency_symbol() : '$') . number_format($unitPrice, 2) . ", Total: " . (function_exists('currency_symbol') ? currency_symbol() : '$') . number_format($totalPrice, 2) . ")" . ($validated['notes'] ? "\nNotes: " . $validated['notes'] : ''),
+            'created_by' => createdBy()
+        ]);
+
+        return redirect()->back()->with('success', __('Product tagged to account successfully.'));
+    }
+
+    public function detachProduct($id, $productId)
+    {
+        $account = Account::where('id', $id)->where('created_by', createdBy())->firstOrFail();
+        $product = \App\Models\Product::find($productId);
+
+        $account->products()->detach($productId);
+
+        if ($product) {
+            \App\Models\AccountActivity::create([
+                'account_id' => $account->id,
+                'user_id' => auth()->id(),
+                'activity_type' => 'Product Removed',
+                'title' => auth()->user()->name . ' removed tagged product: ' . $product->name,
+                'description' => 'Removed product association ' . $product->name,
+                'created_by' => createdBy()
+            ]);
+        }
+
+        return redirect()->back()->with('success', __('Product removed from account.'));
     }
 
     public function edit($accountId)

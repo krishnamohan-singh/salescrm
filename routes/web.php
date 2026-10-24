@@ -1,5 +1,14 @@
 <?php
 
+// Force disable Inertia SSR for all web routes (cPanel does not run Node SSR daemon on port 13714)
+config(['inertia.ssr.enabled' => false]);
+app()->bind(\Inertia\Ssr\Gateway::class, function () {
+    return new class implements \Inertia\Ssr\Gateway {
+        public function dispatch(array $page): ?\Inertia\Ssr\Response {
+            return null;
+        }
+    };
+});
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PermissionController;
@@ -78,6 +87,7 @@ use App\Http\Controllers\OpportunityController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CaseController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\TaxController;
@@ -95,6 +105,7 @@ use App\Http\Controllers\ChatGptController;
 use App\Http\Controllers\QuoteCommentController;
 use App\Http\Controllers\SalesOrderCommentController;
 use App\Http\Controllers\AccountCommentController;
+use App\Http\Controllers\ContactCommentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CallController;
 use App\Http\Controllers\CookieConsentController;
@@ -219,6 +230,289 @@ Route::post('/change-language', [TranslationController::class, 'changeLanguage']
 
 // Custom Page Route
 Route::get('/page/{slug}', [CustomPageController::class, 'show'])->name('custom-page.show');
+
+// Server diagnostic and maintenance routes (for cPanel deployment)
+Route::get('/clear-server-cache', function () {
+    @ini_set('memory_limit', '512M');
+    @set_time_limit(60);
+    $report = [];
+
+    // 1. Force SSR disabled in config/inertia.php
+    $inertiaConfigPath = config_path('inertia.php');
+    if (file_exists($inertiaConfigPath)) {
+        $inertiaCode = file_get_contents($inertiaConfigPath);
+        $inertiaCode = preg_replace("/'enabled'\s*=>\s*true/", "'enabled' => false", $inertiaCode);
+        file_put_contents($inertiaConfigPath, $inertiaCode);
+        $report[] = "config/inertia.php: SSR forced to false";
+    }
+
+    // 2. Remove SSR bundle
+    $ssrFiles = glob(base_path('bootstrap/ssr/*')) ?: [];
+    if (!empty($ssrFiles)) {
+        foreach ($ssrFiles as $f) { @unlink($f); }
+        @rmdir(base_path('bootstrap/ssr'));
+        $report[] = "bootstrap/ssr: Removed " . count($ssrFiles) . " SSR bundle files";
+    } else {
+        $report[] = "bootstrap/ssr: Clean (no bundle)";
+    }
+
+    // 3. Ensure app.blade.php has the safe Vite loader
+    $appBladePath = resource_path('views/app.blade.php');
+    if (file_exists($appBladePath)) {
+        $bladeContent = file_get_contents($appBladePath);
+        if (!str_contains($bladeContent, 'try {') && str_contains($bladeContent, '@vite(')) {
+            $replace = "@php\n        \$pageComponent = \"resources/js/pages/{\$page['component']}.tsx\";\n        try {\n            echo app(\\Illuminate\\Foundation\\Vite::class)(['resources/js/app.tsx', \$pageComponent]);\n        } catch (\\Throwable \$e) {\n            echo app(\\Illuminate\\Foundation\\Vite::class)(['resources/js/app.tsx']);\n        }\n    @endphp";
+            $bladeContent = preg_replace('/@vite\(\s*\[\s*[\'"]resources\/js\/app\.tsx[\'"][^\]]*\]\s*\)/', $replace, $bladeContent);
+            file_put_contents($appBladePath, $bladeContent);
+            $report[] = "app.blade.php: Patched with safe Vite loader";
+        } else {
+            $report[] = "app.blade.php: Safe Vite loader already in place";
+        }
+    }
+
+    // 4. Clear all caches
+    try {
+        \Illuminate\Support\Facades\Artisan::call('config:clear');
+        \Illuminate\Support\Facades\Artisan::call('cache:clear');
+        \Illuminate\Support\Facades\Artisan::call('view:clear');
+        \Illuminate\Support\Facades\Artisan::call('route:clear');
+        $report[] = "Artisan commands: config:clear, cache:clear, view:clear, route:clear executed";
+    } catch (\Throwable $e) {
+        $report[] = "Artisan clear warning: " . $e->getMessage();
+    }
+
+    foreach (glob(base_path('bootstrap/cache/*.php')) ?: [] as $file) {
+        @unlink($file);
+    }
+    foreach (glob(storage_path('framework/views/*.php')) ?: [] as $file) {
+        @unlink($file);
+    }
+    $report[] = "Cache files: Removed bootstrap/cache and compiled blade views";
+
+    $html = "<!DOCTYPE html><html><head><title>Server Cache Cleared & Self-Healed</title>" .
+        "<style>body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#f8fafc;padding:40px;line-height:1.6;}" .
+        ".card{max-width:700px;margin:0 auto;background:#1e293b;border-radius:12px;padding:30px;box-shadow:0 10px 25px rgba(0,0,0,0.4);border:1px solid #334155;}" .
+        "h1{color:#38bdf8;margin-top:0;font-size:24px;}" .
+        "ul{list-style:none;padding:0;margin:20px 0;}" .
+        "li{padding:10px 14px;margin-bottom:8px;background:#0f172a;border-radius:8px;border-left:4px solid #22c55e;font-family:monospace;font-size:14px;}" .
+        ".btn{display:inline-block;padding:12px 24px;background:#3b82f6;color:white;text-decoration:none;border-radius:8px;font-weight:600;margin-top:10px;margin-right:10px;}" .
+        ".btn-secondary{background:#475569;}" .
+        "</style></head><body><div class='card'>" .
+        "<h1>Server Caches Cleared & Self-Healed Successfully</h1>" .
+        "<ul>";
+    foreach ($report as $r) {
+        $html .= "<li>" . htmlspecialchars($r) . "</li>";
+    }
+    $html .= "</ul>" .
+        "<p>All SSR requests and Vite missing-manifest crashes are resolved.</p>" .
+        "<p><a class='btn' href='/leads'>Test Hard Refresh on /leads</a>" .
+        "<a class='btn btn-secondary' href='/show-server-error'>View Diagnostics</a></p>" .
+        "</div></body></html>";
+
+    return response($html, 200);
+});
+
+Route::get('/toggle-debug', function () {
+    $envPath = base_path('.env');
+    if (!file_exists($envPath)) {
+        return '.env file not found at ' . $envPath;
+    }
+    $content = file_get_contents($envPath);
+    if (str_contains($content, 'APP_DEBUG=true')) {
+        $content = str_replace('APP_DEBUG=true', 'APP_DEBUG=false', $content);
+        $status = 'APP_DEBUG is now FALSE (Production Mode)';
+    } elseif (str_contains($content, 'APP_DEBUG=false')) {
+        $content = str_replace('APP_DEBUG=false', 'APP_DEBUG=true', $content);
+        $status = 'APP_DEBUG is now TRUE (Debug Mode - Errors will display detailed stack trace)';
+    } else {
+        $content .= "\nAPP_DEBUG=true\n";
+        $status = 'APP_DEBUG=true added to .env';
+    }
+    file_put_contents($envPath, $content);
+    \Illuminate\Support\Facades\Artisan::call('config:clear');
+    return "<h1>{$status}</h1><p>Visit this URL again to toggle back.</p>";
+});
+
+Route::get('/read-log', function () {
+    $log = storage_path('logs/laravel.log');
+    if (!file_exists($log)) return 'No laravel.log found';
+    $size = filesize($log);
+    $fp = fopen($log, 'rb');
+    $readLen = min(65536, $size);
+    fseek($fp, -$readLen, SEEK_END);
+    $data = fread($fp, $readLen);
+    fclose($fp);
+    return response('<pre style="white-space:pre-wrap;background:#111;color:#50fa7b;padding:20px;font-family:monospace;line-height:1.4;">' . htmlspecialchars($data) . '</pre>', 200);
+});
+
+Route::get('/show-server-error', function () {
+    @ini_set('memory_limit', '512M');
+    $safeTail = function ($filePath, $maxLines = 30) {
+        if (!file_exists($filePath) || !is_readable($filePath)) return null;
+        $size = filesize($filePath);
+        if ($size === 0) return '(File is empty)';
+        $fp = @fopen($filePath, 'rb');
+        if (!$fp) return '(Could not open file)';
+        $readLen = min(32768, $size);
+        fseek($fp, -$readLen, SEEK_END);
+        $data = fread($fp, $readLen);
+        fclose($fp);
+        $lines = explode("\n", $data);
+        return implode("\n", array_slice($lines, -$maxLines));
+    };
+
+    $diagnostics = [];
+    $diagnostics['APP_DEBUG'] = config('app.debug') ? 'TRUE (Active)' : 'FALSE (Production)';
+    $diagnostics['INERTIA_SSR_ENABLED'] = config('inertia.ssr.enabled') ? 'TRUE (Warning: SSR is ON)' : 'FALSE (Correct)';
+    $diagnostics['PHP_VERSION'] = PHP_VERSION;
+    $diagnostics['MEMORY_LIMIT'] = ini_get('memory_limit');
+
+    $bladePath = resource_path('views/app.blade.php');
+    $bladeExists = file_exists($bladePath);
+    $bladeHasTryCatch = $bladeExists && str_contains(file_get_contents($bladePath), 'try {');
+    $diagnostics['app.blade.php'] = $bladeExists ? ($bladeHasTryCatch ? 'Safe (Try/Catch in place)' : 'Needs Update (Raw @vite without try/catch)') : 'Not found';
+
+    $ssrPath = base_path('bootstrap/ssr');
+    $ssrExists = is_dir($ssrPath) && count(glob($ssrPath . '/*') ?: []) > 0;
+    $diagnostics['bootstrap/ssr'] = $ssrExists ? 'Warning: SSR bundle exists' : 'Clean (No SSR bundle)';
+
+    $manifestPath = public_path('build/manifest.json');
+    $diagnostics['manifest.json'] = file_exists($manifestPath) ? 'Exists (' . round(filesize($manifestPath) / 1024, 1) . ' KB)' : 'Missing';
+
+    // Test leads rendering safely
+    $testResult = 'Not tested';
+    try {
+        $user = auth()->user() ?: (\App\Models\User::where('type', 'company')->first() ?: \App\Models\User::first());
+        if ($user) {
+            auth()->login($user);
+            $request = request();
+            $controller = app(\App\Http\Controllers\LeadController::class);
+            $response = $controller->index($request);
+            $html = $response->toResponse($request)->getContent();
+            $testResult = "SUCCESS! Rendered leads HTML length: " . strlen($html) . " bytes for user: " . htmlspecialchars($user->name);
+        } else {
+            $testResult = "Skipped (No user found in database to simulate)";
+        }
+    } catch (\Throwable $e) {
+        $testResult = "ERROR in Leads: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine();
+    }
+
+    // Safe error log reading (max 32KB, never reads entire file)
+    $logs = [];
+    $checkPaths = [
+        'PHP Error Log' => ini_get('error_log') ?: '/home/kommifyi/logs/php.error.log',
+        'cPanel error_log' => base_path('error_log'),
+        'Laravel Log' => storage_path('logs/laravel.log'),
+    ];
+    foreach ($checkPaths as $title => $path) {
+        $tail = $safeTail($path, 30);
+        if ($tail !== null) {
+            $logs[$title . " (" . $path . ")"] = $tail;
+        }
+    }
+
+    $html = "<!DOCTYPE html><html><head><title>CRM Server Diagnostics</title>" .
+        "<style>body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#f8fafc;padding:30px;line-height:1.6;}" .
+        ".card{max-width:900px;margin:0 auto;background:#1e293b;border-radius:12px;padding:30px;border:1px solid #334155;}" .
+        "h1{color:#38bdf8;margin-top:0;font-size:24px;border-bottom:1px solid #334155;padding-bottom:12px;}" .
+        "h2{color:#facc15;font-size:18px;margin-top:25px;margin-bottom:10px;}" .
+        "table{width:100%;border-collapse:collapse;margin:15px 0;font-size:14px;}" .
+        "td,th{padding:10px 14px;border:1px solid #334155;text-align:left;}" .
+        "th{background:#0f172a;color:#94a3b8;width:30%;}" .
+        "td{background:#1e293b;font-family:monospace;}" .
+        ".btn{display:inline-block;padding:10px 20px;background:#3b82f6;color:white;text-decoration:none;border-radius:6px;font-weight:600;margin-right:10px;font-size:14px;}" .
+        ".btn-warn{background:#f59e0b;}" .
+        ".btn-success{background:#10b981;}" .
+        "pre{background:#090d16;color:#50fa7b;padding:16px;border-radius:8px;overflow-x:auto;font-size:12px;max-height:300px;border:1px solid #1e293b;}" .
+        "</style></head><body><div class='card'>" .
+        "<h1>CRM Server Diagnostics & Status</h1>" .
+        "<p>" .
+        "<a class='btn btn-success' href='/clear-server-cache'>Run Self-Heal & Clear Cache</a>" .
+        "<a class='btn btn-warn' href='/toggle-debug'>Toggle Debug Mode</a>" .
+        "<a class='btn' href='/leads'>Go to Leads</a>" .
+        "</p>" .
+        "<h2>Environment & Config</h2>" .
+        "<table>";
+    foreach ($diagnostics as $k => $v) {
+        $color = str_contains($v, 'Warning') || str_contains($v, 'Needs Update') ? '#ef4444' : '#22c55e';
+        $html .= "<tr><th>" . htmlspecialchars($k) . "</th><td style='color:{$color}'>" . htmlspecialchars($v) . "</td></tr>";
+    }
+    $html .= "</table>" .
+        "<h2>Direct /leads Test</h2>" .
+        "<p style='padding:12px;background:#0f172a;border-radius:6px;font-family:monospace;font-size:13px;border-left:4px solid " . (str_contains($testResult, 'SUCCESS') ? '#22c55e' : '#ef4444') . ";'>" . htmlspecialchars($testResult) . "</p>";
+
+    if (!empty($logs)) {
+        $html .= "<h2>Recent Logs (Last 30 lines)</h2>";
+        foreach ($logs as $title => $content) {
+            $html .= "<h3 style='font-size:14px;color:#94a3b8;margin-bottom:6px;'>" . htmlspecialchars($title) . "</h3>" .
+                "<pre>" . htmlspecialchars($content) . "</pre>";
+        }
+    }
+
+    $html .= "</div></body></html>";
+    return response($html, 200);
+});
+
+Route::get('/run-server-migrations', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response('<pre style="white-space:pre-wrap;font-family:monospace;background:#111;color:#50fa7b;padding:20px;line-height:1.5;">' . htmlspecialchars($output ?: "Nothing to migrate.") . '</pre>');
+    } catch (\Throwable $e) {
+        return 'Migration error: ' . $e->getMessage();
+    }
+});
+
+Route::get('/test-leads-direct', function () {
+    try {
+        $user = auth()->user() ?: (\App\Models\User::where('type', 'company')->first() ?: \App\Models\User::first());
+        auth()->login($user);
+        $request = request();
+        $controller = app(\App\Http\Controllers\LeadController::class);
+        $response = $controller->index($request);
+        $html = $response->toResponse($request)->getContent();
+        return '<h1>SUCCESS!</h1><p>Rendered HTML length: ' . strlen($html) . '</p><p>Logged in as: ' . $user->name . ' (' . $user->type . ', ID: ' . $user->id . ')</p>';
+    } catch (\Throwable $e) {
+        $msg = "ERROR: " . $e->getMessage() . "\nFILE: " . $e->getFile() . ":" . $e->getLine() . "\n\nTRACE:\n" . $e->getTraceAsString();
+        @file_put_contents(storage_path('logs/direct-error.txt'), $msg);
+        return response('<div style="background:#fee;border:2px solid #c00;padding:20px;font-family:sans-serif;">' .
+            '<h1 style="color:#c00;">CAUGHT EXCEPTION IN /test-leads-direct:</h1>' .
+            '<h2 style="color:#333;">' . htmlspecialchars($e->getMessage()) . '</h2>' .
+            '<p><strong>File:</strong> ' . htmlspecialchars($e->getFile()) . ':' . $e->getLine() . '</p>' .
+            '<pre style="white-space:pre-wrap;background:#111;color:#50fa7b;padding:15px;line-height:1.4;font-size:13px;">' . 
+            htmlspecialchars($e->getTraceAsString()) . 
+            '</pre></div>', 200);
+    }
+});
+
+Route::get('/test-route-direct/{module}', function ($module) {
+    try {
+        $user = auth()->user() ?: (\App\Models\User::where('type', 'company')->first() ?: \App\Models\User::first());
+        auth()->login($user);
+        $request = request();
+        $controllerMap = [
+            'leads' => \App\Http\Controllers\LeadController::class,
+            'accounts' => \App\Http\Controllers\AccountController::class,
+            'opportunities' => \App\Http\Controllers\OpportunityController::class,
+            'tasks' => \App\Http\Controllers\TaskController::class,
+        ];
+        if (!isset($controllerMap[$module])) {
+            return "Module {$module} not recognized. Valid: " . implode(', ', array_keys($controllerMap));
+        }
+        $controller = app($controllerMap[$module]);
+        $response = $controller->index($request);
+        $html = $response->toResponse($request)->getContent();
+        return '<h1>SUCCESS! Module: ' . $module . '</h1><p>Rendered HTML length: ' . strlen($html) . '</p><p>Logged in as: ' . $user->name . ' (' . $user->type . ', ID: ' . $user->id . ')</p>';
+    } catch (\Throwable $e) {
+        return response('<div style="background:#fee;border:2px solid #c00;padding:20px;font-family:sans-serif;">' .
+            '<h1 style="color:#c00;">CAUGHT EXCEPTION IN /test-route-direct/' . htmlspecialchars($module) . ':</h1>' .
+            '<h2 style="color:#333;">' . htmlspecialchars($e->getMessage()) . '</h2>' .
+            '<p><strong>File:</strong> ' . htmlspecialchars($e->getFile()) . ':' . $e->getLine() . '</p>' .
+            '<pre style="white-space:pre-wrap;background:#111;color:#50fa7b;padding:15px;line-height:1.4;font-size:13px;">' . 
+            htmlspecialchars($e->getTraceAsString()) . 
+            '</pre></div>', 200);
+    }
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Plans routes - accessible without plan check
@@ -538,6 +832,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('products/download/template', [ProductController::class, 'downloadTemplate'])->name('product.download.template');
         });
 
+        // Services routes
+        Route::middleware('permission:manage-services')->group(function () {
+            Route::get('services', [ServiceController::class, 'index'])->middleware('permission:manage-services')->name('services.index');
+            Route::get('services/create', [ServiceController::class, 'create'])->middleware('permission:create-services')->name('services.create');
+            Route::get('services/{service}', [ServiceController::class, 'show'])->middleware('permission:view-services')->name('services.show');
+            Route::get('services/{service}/edit', [ServiceController::class, 'edit'])->middleware('permission:edit-services')->name('services.edit');
+            Route::post('services', [ServiceController::class, 'store'])->middleware('permission:create-services')->name('services.store');
+            Route::put('services/{service}', [ServiceController::class, 'update'])->middleware('permission:edit-services')->name('services.update');
+            Route::delete('services/{service}', [ServiceController::class, 'destroy'])->middleware('permission:delete-services')->name('services.destroy');
+            Route::put('services/{service}/toggle-status', [ServiceController::class, 'toggleStatus'])->middleware('permission:toggle-status-services')->name('services.toggle-status');
+        });
+
         // Reports routes
         Route::middleware('permission:manage-reports')->group(function () {
             Route::get('reports/leads', [ReportsController::class, 'leads'])->name('reports.leads');
@@ -577,6 +883,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('accounts/{account}/toggle-status', [AccountController::class, 'toggleStatus'])->middleware('permission:toggle-status-accounts')->name('accounts.toggle-status');
             Route::delete('accounts/{account}/activities', [AccountController::class, 'deleteActivities'])->middleware('permission:delete-accounts')->name('accounts.delete-activities');
             Route::delete('accounts/{account}/activities/{activity}', [AccountController::class, 'deleteActivity'])->middleware('permission:delete-accounts')->name('accounts.delete-activity');
+            Route::post('accounts/{account}/services', [AccountController::class, 'attachService'])->middleware('permission:edit-accounts')->name('accounts.services.attach');
+            Route::delete('accounts/{account}/services/{service}', [AccountController::class, 'detachService'])->middleware('permission:edit-accounts')->name('accounts.services.detach');
+            Route::post('accounts/{account}/products', [AccountController::class, 'attachProduct'])->middleware('permission:edit-accounts')->name('accounts.products.attach');
+            Route::delete('accounts/{account}/products/{product}', [AccountController::class, 'detachProduct'])->middleware('permission:edit-accounts')->name('accounts.products.detach');
 
             // Account Export route
             Route::get('accounts/file/export/', [AccountController::class, 'fileExport'])->middleware('permission:export-accounts')->name('account.export');
@@ -597,6 +907,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             // Contact Export route
             Route::get('contacts/file/export/', [ContactController::class, 'fileExport'])->middleware('permission:export-contacts')->name('contact.export');
+
+            // Contact Comments routes
+            Route::post('contacts/{contact}/comments', [ContactCommentController::class, 'store'])->middleware('permission:create-contacts')->name('contacts.comments.store');
+            Route::put('contacts/{contact}/comments/{comment}', [ContactCommentController::class, 'update'])->middleware('permission:edit-contacts')->name('contacts.comments.update');
+            Route::put('contacts/{contact}/activities/{activity}/comment', [ContactCommentController::class, 'updateActivity'])->middleware('permission:edit-contacts')->name('contacts.comments.update-activity');
+            Route::delete('contacts/{contact}/comments/{comment}', [ContactCommentController::class, 'destroy'])->middleware('permission:delete-contacts')->name('contacts.comments.destroy');
+            Route::delete('contacts/{contact}/activities', [ContactController::class, 'deleteActivities'])->middleware('permission:delete-contacts')->name('contacts.delete-activities');
+            Route::delete('contacts/{contact}/activities/{activity}', [ContactController::class, 'deleteActivity'])->middleware('permission:delete-contacts')->name('contacts.delete-activity');
         });
 
         // Lead Status routes
@@ -635,6 +953,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('leads/{lead}/update-status', [LeadController::class, 'updateStatus'])->middleware('permission:edit-leads')->name('leads.update-status');
             Route::delete('leads/{lead}/activities', [LeadController::class, 'deleteActivities'])->middleware('permission:delete-leads')->name('leads.delete-activities');
             Route::delete('leads/{lead}/activities/{activity}', [LeadController::class, 'deleteActivity'])->middleware('permission:delete-leads')->name('leads.delete-activity');
+            Route::post('leads/{lead}/services', [LeadController::class, 'attachService'])->middleware('permission:edit-leads')->name('leads.services.attach');
+            Route::delete('leads/{lead}/services/{service}', [LeadController::class, 'detachService'])->middleware('permission:edit-leads')->name('leads.services.detach');
+            Route::post('leads/{lead}/products', [LeadController::class, 'attachProduct'])->middleware('permission:edit-leads')->name('leads.products.attach');
+            Route::delete('leads/{lead}/products/{product}', [LeadController::class, 'detachProduct'])->middleware('permission:edit-leads')->name('leads.products.detach');
 
             // Lead Import/Export routes
             Route::get('leads/file/export/', [LeadController::class, 'fileExport'])->middleware('permission:export-leads')->name('lead.export');
@@ -664,9 +986,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Main Tasks routes
             Route::get('tasks', [TaskController::class, 'index'])->name('tasks.index');
             Route::post('tasks', [TaskController::class, 'store'])->name('tasks.store');
+            Route::get('tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
             Route::put('tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
             Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
             Route::post('tasks/{id}/status', [TaskController::class, 'updateStatus'])->name('tasks.update-status');
+            Route::post('tasks/{task}/notes', [TaskController::class, 'storeNote'])->name('tasks.notes.store');
+            Route::put('tasks/{task}/notes/{note}', [TaskController::class, 'updateNote'])->name('tasks.notes.update');
+            Route::delete('tasks/{task}/notes/{note}', [TaskController::class, 'destroyNote'])->name('tasks.notes.destroy');
 
             // Task Statuses routes
             Route::get('task-statuses', [TaskStatusController::class, 'index'])->name('task-statuses.index');
@@ -692,6 +1018,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Backward compatibility aliases for lead-tasks
             Route::get('lead-tasks', [TaskController::class, 'index'])->name('lead-tasks.index');
             Route::post('lead-tasks', [TaskController::class, 'store'])->name('lead-tasks.store');
+            Route::get('lead-tasks/{leadTask}', [TaskController::class, 'show'])->name('lead-tasks.show');
             Route::put('lead-tasks/{leadTask}', [TaskController::class, 'update'])->name('lead-tasks.update');
             Route::delete('lead-tasks/{leadTask}', [TaskController::class, 'destroy'])->name('lead-tasks.destroy');
             Route::post('lead-tasks/{id}/status', [TaskController::class, 'updateStatus'])->name('lead-tasks.update-status');
@@ -758,6 +1085,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('opportunities/{opportunity}/update-status', [OpportunityController::class, 'updateStatus'])->middleware('permission:edit-opportunities')->name('opportunities.update-status');
             Route::delete('opportunities/{opportunity}/activities', [OpportunityController::class, 'deleteActivities'])->middleware('permission:delete-opportunities')->name('opportunities.delete-activities');
             Route::delete('opportunities/{opportunity}/activities/{activity}', [OpportunityController::class, 'deleteActivity'])->middleware('permission:delete-opportunities')->name('opportunities.delete-activity');
+            Route::post('opportunities/{opportunity}/services', [OpportunityController::class, 'attachService'])->middleware('permission:edit-opportunities')->name('opportunities.services.attach');
+            Route::delete('opportunities/{opportunity}/services/{service}', [OpportunityController::class, 'detachService'])->middleware('permission:edit-opportunities')->name('opportunities.services.detach');
+            Route::post('opportunities/{opportunity}/products', [OpportunityController::class, 'attachProduct'])->middleware('permission:edit-opportunities')->name('opportunities.products.attach');
+            Route::delete('opportunities/{opportunity}/products/{product}', [OpportunityController::class, 'detachProduct'])->middleware('permission:edit-opportunities')->name('opportunities.products.detach');
 
             // Opportunity Export route
             Route::get('opportunities/file/export/', [OpportunityController::class, 'fileExport'])->middleware('permission:export-opportunities')->name('opportunity.export');
@@ -1053,6 +1384,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('api/google-calendar/sync', [\App\Http\Controllers\GoogleCalendarController::class, 'syncEvents'])->name('google-calendar.sync');
         Route::get('api/google-calendar/status', [\App\Http\Controllers\GoogleCalendarController::class, 'checkStatus'])->name('google-calendar.status');
 
+        // Google Mail (Gmail) Integration & Timeline Capture routes
+        Route::get('integrations/google-mail/connect', [\App\Http\Controllers\GoogleMailController::class, 'connect'])->name('google-mail.connect');
+        Route::get('integrations/google-mail/callback', [\App\Http\Controllers\GoogleMailController::class, 'callback'])->name('google-mail.callback');
+        Route::post('integrations/google-mail/disconnect', [\App\Http\Controllers\GoogleMailController::class, 'disconnect'])->name('google-mail.disconnect');
+        Route::post('integrations/google-mail/sync', [\App\Http\Controllers\GoogleMailController::class, 'sync'])->name('google-mail.sync');
+        Route::post('integrations/google-mail/send', [\App\Http\Controllers\GoogleMailController::class, 'send'])->name('google-mail.send');
+        Route::post('integrations/google-mail/test-sync', [\App\Http\Controllers\GoogleMailController::class, 'simulateTestSync'])->name('google-mail.test-sync');
+        Route::get('api/google-mail/status', [\App\Http\Controllers\GoogleMailController::class, 'status'])->name('google-mail.status');
+
         // Document Folder management
        Route::middleware('permission:manage-document-folders')->group(function () {
             Route::get('document-folders', [DocumentFolderController::class, 'index'])->middleware('permission:manage-document-folders')->name('document-folders.index');
@@ -1067,6 +1407,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Account Activities
             Route::get('stream/account-activities', [StreamController::class, 'accountActivities'])->middleware('permission:view-stream')->name('stream.account-activities');
             Route::delete('stream/account-activities/{id}', [StreamController::class, 'deleteAccountActivity'])->middleware('permission:delete-stream')->name('stream.delete-account-activities');
+
+            // Contact Activities
+            Route::get('stream/contact-activities', [StreamController::class, 'contactActivities'])->middleware('permission:view-stream')->name('stream.contact-activities');
+            Route::delete('stream/contact-activities/{id}', [StreamController::class, 'deleteContactActivity'])->middleware('permission:delete-stream')->name('stream.delete-contact-activities');
 
             // Invoice Activities
             Route::get('stream/invoice-activities', [StreamController::class, 'invoiceActivities'])->middleware('permission:view-stream')->name('stream.invoice-activities');

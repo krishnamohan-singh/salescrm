@@ -260,8 +260,14 @@ class ContactController extends Controller
         $taskTypes = \App\Models\TaskType::where('created_by', $tenantId)->where('status', 'active')->orderBy('id')->get();
         $taskPriorities = \App\Models\TaskPriority::where('created_by', $tenantId)->where('status', 'active')->orderBy('level')->get();
 
+        $streamItems = $contact->activities()
+            ->with('user:id,name,avatar')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
         return Inertia::render('contacts/show', [
             'contact'        => $contact,
+            'streamItems'    => $streamItems,
             'meetings'       => $meetings,
             'tasks'          => $tasks,
             'users'          => $users,
@@ -289,6 +295,30 @@ class ContactController extends Controller
         } else {
             return redirect()->back()->with('error', __('Contact not found.'));
         }
+    }
+
+    public function deleteActivity($contactId, $activityId)
+    {
+        $contact = Contact::where('id', $contactId)
+            ->where('created_by', createdBy())
+            ->firstOrFail();
+
+        \App\Models\ContactActivity::where('id', $activityId)
+            ->where('contact_id', $contact->id)
+            ->delete();
+
+        return redirect()->back()->with('success', __('Activity deleted successfully'));
+    }
+
+    public function deleteActivities($contactId)
+    {
+        $contact = Contact::where('id', $contactId)
+            ->where('created_by', createdBy())
+            ->firstOrFail();
+
+        \App\Models\ContactActivity::where('contact_id', $contact->id)->delete();
+
+        return redirect()->back()->with('success', __('All activities deleted successfully'));
     }
 
     public function fileExport()

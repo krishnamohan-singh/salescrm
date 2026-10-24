@@ -25,6 +25,7 @@ import SeoSettings from './components/seo-settings';
 import CacheSettings from './components/cache-settings';
 import WebhookSettings from './components/webhook-settings';
 import GoogleCalendarSettings from './components/google-calendar-settings';
+import GoogleMailSettings from './components/google-mail-settings';
 import InvoiceTemplateSettings from './components/invoice-template-settings';
 import QuoteTemplateSettings from './components/quote-template-settings';
 import SalesOrderTemplateSettings from './components/sales-order-template-settings';
@@ -161,7 +162,12 @@ export default function Settings() {
             icon: <Calendar className="h-4 w-4 mr-2" />,
             permission: 'settings'
         },
-
+        {
+            title: t('Google Mail (Gmail)'),
+            href: '#google-mail-settings',
+            icon: <Mail className="h-4 w-4 mr-2" />,
+            permission: 'settings'
+        },
     ];
 
     if (!hasRole(auth.roles, 'superadmin')) {
@@ -224,6 +230,7 @@ export default function Settings() {
     const cacheSettingsRef = useRef<HTMLDivElement>(null);
     const webhookSettingsRef = useRef<HTMLDivElement>(null);
     const googleCalendarSettingsRef = useRef<HTMLDivElement>(null);
+    const googleMailSettingsRef = useRef<HTMLDivElement>(null);
 
     const storageSettingsRef = useRef<HTMLDivElement>(null);
 
@@ -255,12 +262,15 @@ export default function Settings() {
             const cacheSettingsPosition = cacheSettingsRef.current?.offsetTop || 0;
             const webhookSettingsPosition = webhookSettingsRef.current?.offsetTop || 0;
             const googleCalendarSettingsPosition = googleCalendarSettingsRef.current?.offsetTop || 0;
+            const googleMailSettingsPosition = googleMailSettingsRef.current?.offsetTop || 0;
 
             const storageSettingsPosition = storageSettingsRef.current?.offsetTop || 0;
 
             // Determine active section based on scroll position
             if (scrollPosition >= webhookSettingsPosition && webhookSettingsPosition > 0) {
                 setActiveSection('webhook-settings');
+            } else if (scrollPosition >= googleMailSettingsPosition && googleMailSettingsPosition > 0) {
+                setActiveSection('google-mail-settings');
             } else if (scrollPosition >= googleCalendarSettingsPosition && googleCalendarSettingsPosition > 0) {
                 setActiveSection('google-calendar-settings');
             } else if (scrollPosition >= cacheSettingsPosition && cacheSettingsPosition > 0) {
@@ -528,6 +538,13 @@ export default function Settings() {
                     {(hasPermission(auth.permissions, 'settings') || hasRole(auth.roles, 'company')) && (
                         <section id="google-calendar-settings" ref={googleCalendarSettingsRef} className="mb-8">
                             <GoogleCalendarSettings settings={systemSettings} />
+                        </section>
+                    )}
+
+                    {/* Google Mail (Gmail) Settings Section */}
+                    {(hasPermission(auth.permissions, 'settings') || hasRole(auth.roles, 'company')) && (
+                        <section id="google-mail-settings" ref={googleMailSettingsRef} className="mb-8">
+                            <GoogleMailSettings settings={systemSettings} />
                         </section>
                     )}
 

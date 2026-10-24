@@ -51,4 +51,19 @@ class Contact extends BaseModel
     {
         return $this->hasMany(Task::class, 'contact_id')->with(['assignedUser', 'creator', 'taskStatus', 'taskType', 'taskPriority'])->orderBy('due_date', 'asc');
     }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(ContactActivity::class)->with('user')->orderBy('created_at', 'desc');
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ContactComment::class)->with('user')->orderBy('created_at', 'desc');
+    }
+
+    public function emails(): HasMany
+    {
+        return $this->hasMany(CrmEmail::class)->orderBy('sent_at', 'desc');
+    }
 }

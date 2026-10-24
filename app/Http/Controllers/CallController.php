@@ -149,8 +149,8 @@ class CallController extends Controller
             return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
         }
 
-        // Check attendee availability
-        if (isset($validated['attendees'])) {
+        // Check attendee availability (only for planned/scheduled calls)
+        if (isset($validated['attendees']) && ($validated['status'] ?? 'planned') !== 'held') {
             foreach ($validated['attendees'] as $attendee) {
                 $callConflict = CallAttendee::where('attendee_type', $attendee['type'])
                     ->where('attendee_id', $attendee['id'])
@@ -214,14 +214,20 @@ class CallController extends Controller
 
         // Create activity for parent modules
         if ($call->parent_module && $call->parent_id) {
+            $isHeld = ($call->status === 'held');
+            $actionVerb = $isHeld ? 'logged a call' : 'created a call';
+            $activityType = $isHeld ? 'Call Logged' : 'Call Created';
+            $timeText = ($isHeld ? 'Call held on ' : 'Call scheduled for ') . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time));
+            $callDesc = $timeText . ($call->description ? "\nDiscussion: " . $call->description : '');
+
             switch ($call->parent_module) {
                 case 'account':
                     \App\Models\AccountActivity::create([
                         'account_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
                     break;
@@ -229,9 +235,9 @@ class CallController extends Controller
                     \App\Models\LeadActivity::create([
                         'lead_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
                     break;
@@ -239,18 +245,43 @@ class CallController extends Controller
                     \App\Models\OpportunityActivity::create([
                         'opportunity_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
+                    break;
+                case 'contact':
+                    \App\Models\ContactActivity::create([
+                        'contact_id' => $call->parent_id,
+                        'user_id' => auth()->id(),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
+                        'created_by' => createdBy()
+                    ]);
+                    $contact = \App\Models\Contact::find($call->parent_id);
+                    if ($contact && $contact->account_id) {
+                        \App\Models\AccountActivity::create([
+                            'account_id' => $contact->account_id,
+                            'user_id' => auth()->id(),
+                            'activity_type' => $activityType,
+                            'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title . ' (Contact: ' . $contact->name . ')',
+                            'description' => $callDesc,
+                            'created_by' => createdBy()
+                        ]);
+                    }
                     break;
             }
         }
 
-        // Create activity for attendees
-        if (isset($validated['attendees'])) {
+        // Create activity for attendees (if not already logged as parent and if call is planned)
+        if (isset($validated['attendees']) && ($call->status ?? 'planned') !== 'held') {
             foreach ($validated['attendees'] as $attendee) {
+                if ($call->parent_module === $attendee['type'] && (int)$call->parent_id === (int)$attendee['id']) {
+                    continue;
+                }
+
                 switch ($attendee['type']) {
                     case 'contact':
                         $contact = \App\Models\Contact::find($attendee['id']);

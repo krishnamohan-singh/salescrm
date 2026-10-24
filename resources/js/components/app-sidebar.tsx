@@ -4,7 +4,7 @@ import { useLayout } from '@/contexts/LayoutContext';
 import { useSidebarSettings } from '@/contexts/SidebarContext';
 import { useBrand } from '@/contexts/BrandContext';
 import { type NavItem } from '@/types';
-import { Folder, LayoutGrid, ShoppingBag, Users, Settings, FileText, Briefcase, Calendar, CreditCard, Ticket, Gift, CalendarDays, Image, Building2, Phone, TrendingUp, Package, Megaphone, DollarSign, Palette, Mail, Activity, NotebookPen, MegaphoneIcon, TicketPercent, Search, X, ListTodo, CheckSquare, CalendarCheck, Target, Cable } from 'lucide-react';
+import { Folder, LayoutGrid, ShoppingBag, Users, Settings, FileText, Briefcase, Calendar, CreditCard, Ticket, Gift, CalendarDays, Image, Building2, Phone, TrendingUp, Package, Megaphone, DollarSign, Palette, Mail, Activity, NotebookPen, MegaphoneIcon, TicketPercent, Search, X, ListTodo, CheckSquare, CalendarCheck, Target, Cable, Layers } from 'lucide-react';
 import AppLogo from './app-logo';
 import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -337,7 +337,7 @@ export function AppSidebar() {
             items.push({ title: t('Shipping Provider Types'), href: route('shipping-provider-types.index'), icon: Ticket, group: t('Procurement & Fulfillment') });
         }
 
-        // ── 5. Catalog ───────────────────────────────────────────────
+        // ── 5. Catalogue ─────────────────────────────────────────────
         const productSetupChildren = [];
         if (hasPermission(permissions, 'manage-taxes')) {
             productSetupChildren.push({ title: t('Taxes'), href: route('taxes.index') });
@@ -348,11 +348,14 @@ export function AppSidebar() {
         if (hasPermission(permissions, 'manage-categories')) {
             productSetupChildren.push({ title: t('Categories'), href: route('categories.index') });
         }
-        if (hasPermission(permissions, 'manage-products')) {
-            items.push({ title: t('Products'), href: route('products.index'), icon: ShoppingBag, group: t('Catalog') });
+        if (hasPermission(permissions, 'manage-products') || isCompany) {
+            items.push({ title: t('Products'), href: route('products.index'), icon: ShoppingBag, group: t('Catalogue') });
+        }
+        if (isCompany || hasPermission(permissions, 'manage-services') || hasPermission(permissions, 'view-services')) {
+            items.push({ title: t('Services'), href: route('services.index'), icon: Layers, group: t('Catalogue') });
         }
         if (productSetupChildren.length > 0) {
-            items.push({ title: t('Product Setup'), icon: Package, group: t('Catalog'), children: productSetupChildren });
+            items.push({ title: t('Product Setup'), icon: Package, group: t('Catalogue'), children: productSetupChildren });
         }
 
 

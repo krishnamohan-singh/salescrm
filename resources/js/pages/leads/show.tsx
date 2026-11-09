@@ -24,6 +24,7 @@ import { EntityServicesCard } from '@/components/entity-services-card';
 import { EntityProductsCard } from '@/components/entity-products-card';
 import { LogCallModal } from '@/components/log-call-modal';
 import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
+import { SendEmailModal } from '@/components/send-email-modal';
 
 export default function LeadShow() {
   const { t } = useTranslation();
@@ -33,6 +34,7 @@ export default function LeadShow() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
   const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
+  const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [currentActivity, setCurrentActivity] = useState<any>(null);
   const [newComment, setNewComment] = useState('');
   const [editingComment, setEditingComment] = useState<number | null>(null);
@@ -41,10 +43,26 @@ export default function LeadShow() {
   const permissions = auth?.permissions;
   const getInitials = useInitials();
 
+  const getReturnUrl = () => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('leads_list_return_url');
+      if (saved && (saved.startsWith('/leads') || saved.includes('/leads'))) return saved;
+    }
+    return route('leads.index');
+  };
+
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/leads') && !document.referrer.includes('/leads/')) {
+      window.history.back();
+      return;
+    }
+    router.visit(getReturnUrl());
+  };
+
   const breadcrumbs = [
     { title: t('Dashboard'), href: route('dashboard') },
     { title: t('Lead Management') },
-    { title: t('Leads'), href: route('leads.index') },
+    { title: t('Leads'), href: getReturnUrl() },
     { title: t('View Lead') }
   ];
 
@@ -61,16 +79,18 @@ export default function LeadShow() {
 
   const formatCurrency = (amount: number) => window.appSettings?.formatCurrency(Number(amount || 0)) || `$${Number(amount || 0).toFixed(2)}`;
 
-
-
-
-
   return (
     <PageTemplate
       title={lead.name}
       description={t('Lead details and related information')}
       breadcrumbs={breadcrumbs}
       actions={[
+        ...(lead.email || lead.alternate_email ? [{
+          label: t('Send Email'),
+          icon: <Mail className="h-4 w-4 mr-2" />,
+          variant: 'default' as const,
+          onClick: () => setIsSendEmailModalOpen(true)
+        }] : []),
         ...(hasPermission(permissions, 'create-calls') ? [{
           label: t('Log Call'),
           icon: <PhoneCall className="h-4 w-4 mr-2" />,
@@ -81,14 +101,14 @@ export default function LeadShow() {
           label: t('Back'),
           icon: <ArrowLeft className="h-4 w-4 mr-2" />,
           variant: 'outline' as const,
-          onClick: () => router.visit(route('leads.index'))
+          onClick: handleBack
         }
       ]}
       noPadding
     >
       <div className="mx-auto space-y-6">
         {/* Summary Stat Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {([
             { label: t('Lead Value'), value: formatCurrency(lead.value), icon: DollarSign, iconCls: 'text-emerald-600', blobCls: 'bg-emerald-50 dark:bg-emerald-900/30' },
             { label: t('Pipeline Stage'), value: lead.lead_status?.name || '—', icon: TrendingUp, iconCls: 'text-blue-600', blobCls: 'bg-blue-50 dark:bg-blue-900/30' },
@@ -99,6 +119,13 @@ export default function LeadShow() {
               icon: Clock,
               iconCls: lead.lead_age_badge === 'aging' ? 'text-rose-600' : lead.lead_age_badge === 'warm' ? 'text-amber-600' : 'text-emerald-600',
               blobCls: lead.lead_age_badge === 'aging' ? 'bg-rose-50 dark:bg-rose-900/30' : lead.lead_age_badge === 'warm' ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-emerald-50 dark:bg-emerald-900/30',
+            },
+            {
+              label: t('Last Contacted'),
+              value: lead.last_contacted_date ? (window.appSettings?.formatDateTime(lead.last_contacted_date, false) || new Date(lead.last_contacted_date).toLocaleDateString()) : t('Never'),
+              icon: PhoneCall,
+              iconCls: 'text-indigo-600',
+              blobCls: 'bg-indigo-50 dark:bg-indigo-900/30',
             },
             { label: t('Created'), value: window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString(), icon: Calendar, iconCls: 'text-purple-600', blobCls: 'bg-purple-50 dark:bg-purple-900/30' },
           ] as const).map(({ label, value, icon: Icon, iconCls, blobCls }) => (
@@ -244,7 +271,22 @@ export default function LeadShow() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
                     <div className="space-y-0.5">
                       <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
-                      <p className="text-sm font-medium text-foreground truncate">{lead.email || '—'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">{lead.email || '—'}</p>
+                        {lead.email && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsSendEmailModalOpen(true)}
+                            className="h-6 px-1.5 text-xs text-primary gap-1 hover:bg-primary/10"
+                            title={t('Send Email')}
+                          >
+                            <Mail className="h-3 w-3" />
+                            <span>{t('Send')}</span>
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-xs font-medium text-muted-foreground">{t('Alternate Email')}</p>
@@ -689,6 +731,17 @@ export default function LeadShow() {
         parentEmail={lead.email}
         users={users}
         defaultAssigneeId={lead.assigned_to}
+      />
+
+      {/* Send Email Modal */}
+      <SendEmailModal
+        isOpen={isSendEmailModalOpen}
+        onClose={() => setIsSendEmailModalOpen(false)}
+        recipientEmail={lead.email || lead.alternate_email || ''}
+        recipientName={lead.name}
+        entityType="lead"
+        entityId={lead.id}
+        entityName={lead.name}
       />
     </PageTemplate>
   );

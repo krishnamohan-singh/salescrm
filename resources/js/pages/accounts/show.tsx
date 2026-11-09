@@ -1,7 +1,7 @@
 import React from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
-import { ArrowLeft, Building, User, Mail, Phone, Globe, MapPin, Calendar, FileText, UserCheck, Send, Edit, MessageCircle, DollarSign, TrendingUp, Clock, Tag, Eye, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building, User, Mail, Phone, PhoneCall, Globe, MapPin, Calendar, FileText, UserCheck, Send, Edit, MessageCircle, DollarSign, TrendingUp, Clock, Tag, Eye, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import { EntityTasksCard } from '@/components/entity-tasks-card';
 import { EntityServicesCard } from '@/components/entity-services-card';
 import { EntityProductsCard } from '@/components/entity-products-card';
 import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
+import { SendEmailModal } from '@/components/send-email-modal';
 
 export default function AccountShow() {
   const { t } = useTranslation();
@@ -27,6 +28,7 @@ export default function AccountShow() {
   const isCompany = auth?.user?.type === 'company';
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [currentActivity, setCurrentActivity] = useState<any>(null);
   const [newComment, setNewComment] = useState('');
   const [editingComment, setEditingComment] = useState<number | null>(null);
@@ -36,10 +38,26 @@ export default function AccountShow() {
   const filteredMeetings = useMemo(() => meetings?.filter((m: any) => m.type !== 'call') || [], [meetings]);
   const filteredCalls = useMemo(() => meetings?.filter((m: any) => m.type === 'call') || [], [meetings]);
 
+  const getReturnUrl = () => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('accounts_list_return_url');
+      if (saved && (saved.startsWith('/accounts') || saved.includes('/accounts'))) return saved;
+    }
+    return route('accounts.index');
+  };
+
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/accounts') && !document.referrer.includes('/accounts/')) {
+      window.history.back();
+      return;
+    }
+    router.visit(getReturnUrl());
+  };
+
   const breadcrumbs = [
     { title: t('Dashboard'), href: route('dashboard') },
     { title: t('Account Management') },
-    { title: t('Accounts'), href: route('accounts.index') },
+    { title: t('Accounts'), href: getReturnUrl() },
     { title: t('View Account') }
   ];
 
@@ -70,11 +88,17 @@ export default function AccountShow() {
       description={t('Account details and related information')}
       breadcrumbs={breadcrumbs}
       actions={[
+        ...(account.email || account.alternate_email ? [{
+          label: t('Send Email'),
+          icon: <Mail className="h-4 w-4 mr-2" />,
+          variant: 'default' as const,
+          onClick: () => setIsSendEmailModalOpen(true)
+        }] : []),
         {
           label: t('Back'),
           icon: <ArrowLeft className="h-4 w-4 mr-2" />,
           variant: 'outline',
-          onClick: () => router.visit(route('accounts.index'))
+          onClick: handleBack
         }
       ]}
       noPadding
@@ -82,11 +106,12 @@ export default function AccountShow() {
       <div className="mx-auto space-y-6">
 
         {/* Summary Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {([
             { label: t('Type'), value: account.account_type?.name || '—', icon: Building, iconCls: 'text-blue-600', blobCls: 'bg-blue-50 dark:bg-blue-900/30' },
             { label: t('Industry'), value: account.account_industry?.name || '—', icon: Tag, iconCls: 'text-orange-600', blobCls: 'bg-orange-50 dark:bg-orange-900/30' },
             { label: t('Contacts'), value: `${account.contacts?.length || 0} ${(account.contacts?.length || 0) === 1 ? t('contact') : t('contacts')}`, icon: User, iconCls: 'text-purple-600', blobCls: 'bg-purple-50 dark:bg-purple-900/30' },
+            { label: t('Last Contacted'), value: account.last_contacted_date ? formatDate(account.last_contacted_date) : t('Never'), icon: PhoneCall, iconCls: 'text-indigo-600', blobCls: 'bg-indigo-50 dark:bg-indigo-900/30' },
             { label: t('Created'), value: formatDate(account.created_at), icon: Clock, iconCls: 'text-emerald-600', blobCls: 'bg-emerald-50 dark:bg-emerald-900/30' },
           ] as const).map(({ label, value, icon: Icon, iconCls, blobCls }) => (
             <Card key={label} className="relative overflow-hidden">
@@ -214,7 +239,22 @@ export default function AccountShow() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
                     <div className="space-y-0.5 min-w-0">
                       <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
-                      <p className="text-sm font-medium text-foreground break-all">{account.email || '—'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground break-all">{account.email || '—'}</p>
+                        {account.email && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsSendEmailModalOpen(true)}
+                            className="h-6 px-1.5 text-xs text-primary gap-1 hover:bg-primary/10"
+                            title={t('Send Email')}
+                          >
+                            <Mail className="h-3 w-3" />
+                            <span>{t('Send')}</span>
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-0.5 min-w-0">
                       <p className="text-xs font-medium text-muted-foreground">{t('Alternate Email')}</p>
@@ -554,6 +594,17 @@ export default function AccountShow() {
         </div>
 
       </div>
+
+      {/* Send Email Modal */}
+      <SendEmailModal
+        isOpen={isSendEmailModalOpen}
+        onClose={() => setIsSendEmailModalOpen(false)}
+        recipientEmail={account.email || account.alternate_email || ''}
+        recipientName={account.name}
+        entityType="account"
+        entityId={account.id}
+        entityName={account.name}
+      />
     </PageTemplate>
   );
 }

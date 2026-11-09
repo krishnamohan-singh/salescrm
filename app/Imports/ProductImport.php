@@ -16,14 +16,31 @@ class ProductImport implements ToModel, WithHeadingRow
 
     public function model(array $row)
     {
-        // Skip if both name and sku are empty
-        if (empty($row['name']) && empty($row['sku'])) {
+        // Skip if name is empty
+        if (empty($row['name'])) {
+            $this->skippedCount++;
             return null;
         }
 
-        // Check for duplicate SKU
-        if (!empty($row['sku'])) {
-            $productBySku = Product::where('sku', $row['sku'])->where('created_by', createdBy())->first();
+        // Category is required
+        $categoryId = null;
+        if (!empty($row['category'])) {
+            $category = \App\Models\Category::where('name', $row['category'])
+                ->where('created_by', createdBy())
+                ->first();
+            if ($category) {
+                $categoryId = $category->id;
+            }
+        }
+        if (!$categoryId) {
+            $this->skippedCount++;
+            return null;
+        }
+
+        // Check for duplicate SKU if SKU is provided
+        $sku = !empty($row['sku']) ? trim($row['sku']) : null;
+        if ($sku) {
+            $productBySku = Product::where('sku', $sku)->where('created_by', createdBy())->first();
             if ($productBySku) {
                 $this->skippedCount++;
                 return null;
@@ -32,25 +49,16 @@ class ProductImport implements ToModel, WithHeadingRow
 
         $productData = [
             'name' => $row['name'] ?? '',
-            'sku' => $row['sku'] ?? '',
-            'description' => $row['description'] ?? '',
+            'sku' => $sku,
+            'description' => $row['description'] ?? null,
             'price' => is_numeric($row['price'] ?? null) ? (float)$row['price'] : 0,
             'stock_quantity' => is_numeric($row['stock'] ?? null) ? (int)$row['stock'] : 0,
+            'category_id' => $categoryId,
             'status' => in_array($row['status'] ?? 'active', ['active', 'inactive']) ? $row['status'] : 'active',
             'created_by' => createdBy(),
         ];
 
-        // Category
-        if (!empty($row['category'])) {
-            $category = \App\Models\Category::where('name', $row['category'])
-                ->where('created_by', createdBy())
-                ->first();
-            if ($category) {
-                $productData['category_id'] = $category->id;
-            }
-        }
-
-        // Brand
+        // Brand (optional)
         if (!empty($row['brand'])) {
             $brand = \App\Models\Brand::where('name', $row['brand'])
                 ->where('created_by', createdBy())
@@ -60,12 +68,14 @@ class ProductImport implements ToModel, WithHeadingRow
             }
         }
 
-        // Tax
+        // Tax (optional)
         $taxValue = trim($row['tax'] ?? '');
-        $tax = !empty($taxValue)
-            ? \App\Models\Tax::where('name', $taxValue)->where('created_by', createdBy())->first()
-            : null;
-        $productData['tax_id'] = $tax?->id ?? \App\Models\Tax::where('created_by', createdBy())->value('id');
+        if (!empty($taxValue)) {
+            $tax = \App\Models\Tax::where('name', $taxValue)->where('created_by', createdBy())->first();
+            if ($tax) {
+                $productData['tax_id'] = $tax->id;
+            }
+        }
 
         $this->addedCount++;
         return new Product($productData);

@@ -220,6 +220,21 @@ class PermissionSeeder extends Seeder
             ['name' => 'export-products', 'module' => 'products', 'label' => 'Export Products', 'description' => 'Can export products'],
             ['name' => 'import-products', 'module' => 'products', 'label' => 'Import Products', 'description' => 'Can import products'],
 
+            // Services management
+            ['name' => 'manage-services', 'module' => 'services', 'label' => 'Manage Services', 'description' => 'Can manage services catalog and mappings'],
+            ['name' => 'view-services', 'module' => 'services', 'label' => 'View Services', 'description' => 'Can view services and mapped entities'],
+            ['name' => 'create-services', 'module' => 'services', 'label' => 'Create Services', 'description' => 'Can create new services in catalog'],
+            ['name' => 'edit-services', 'module' => 'services', 'label' => 'Edit Services', 'description' => 'Can edit service details and pricing'],
+            ['name' => 'delete-services', 'module' => 'services', 'label' => 'Delete Services', 'description' => 'Can delete services from catalog'],
+            ['name' => 'toggle-status-services', 'module' => 'services', 'label' => 'Toggle Status Services', 'description' => 'Can activate or deactivate services'],
+
+            // Email and Mailbox management
+            ['name' => 'manage-emails', 'module' => 'emails', 'label' => 'Manage Emails & Mailbox', 'description' => 'Can access Emails & Mailbox, connect separate Google account, send and sync emails'],
+            ['name' => 'view-emails', 'module' => 'emails', 'label' => 'View Own Emails & Mailbox', 'description' => 'Can view own sent and received emails and Mailbox'],
+            ['name' => 'view-all-emails', 'module' => 'emails', 'label' => 'View All Emails & Mailbox', 'description' => 'Can view all emails across company team members'],
+            ['name' => 'send-emails', 'module' => 'emails', 'label' => 'Send Emails', 'description' => 'Can compose and send emails to leads, contacts, accounts, and opportunities'],
+            ['name' => 'delete-emails', 'module' => 'emails', 'label' => 'Delete Emails', 'description' => 'Can delete emails from CRM Mailbox'],
+
             // Contact management
             ['name' => 'manage-contacts', 'module' => 'contacts', 'label' => 'Manage Contacts', 'description' => 'Can manage contacts'],
             ['name' => 'manage-all-contacts', 'module' => 'contacts', 'label' => 'Manage All Contacts', 'description' => 'Can view and manage all contacts in the company'],

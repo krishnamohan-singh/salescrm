@@ -1,7 +1,8 @@
 import React from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, Link, router } from '@inertiajs/react';
-import { ArrowLeft, DollarSign, Calendar, Building, Package, FileText, Trash2, Send, Edit, MessageCircle, TrendingUp, Clock, UserCheck, Phone, PhoneCall, Plus, Eye, Hash, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, DollarSign, Calendar, Building, Package, FileText, Trash2, Send, Edit, MessageCircle, TrendingUp, Clock, UserCheck, Phone, PhoneCall, Plus, Eye, Hash, ShoppingCart, Mail } from 'lucide-react';
+import { SendEmailModal } from '@/components/send-email-modal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -29,15 +30,32 @@ export default function OpportunityShow() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
     const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
+    const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
     const [currentActivity, setCurrentActivity] = useState<any>(null);
     const [newComment, setNewComment] = useState('');
     const [editingComment, setEditingComment] = useState<number | null>(null);
     const [editCommentText, setEditCommentText] = useState('');
     const permissions = auth?.permissions || [];
+    const getReturnUrl = () => {
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('opportunities_list_return_url');
+            if (saved && (saved.startsWith('/opportunities') || saved.includes('/opportunities'))) return saved;
+        }
+        return route('opportunities.index');
+    };
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/opportunities') && !document.referrer.includes('/opportunities/')) {
+            window.history.back();
+            return;
+        }
+        router.visit(getReturnUrl());
+    };
+
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Opportunity Management') },
-        { title: t('Opportunities'), href: route('opportunities.index') },
+        { title: t('Opportunities'), href: getReturnUrl() },
         { title: t('View Opportunity') }
     ];
 
@@ -85,6 +103,12 @@ export default function OpportunityShow() {
             breadcrumbs={breadcrumbs}
             description={t('Opportunity details and related information')}
             actions={[
+                ...((opportunity.contact?.email || opportunity.account?.email) ? [{
+                    label: t('Send Email'),
+                    icon: <Mail className="h-4 w-4 mr-2" />,
+                    variant: 'default' as const,
+                    onClick: () => setIsSendEmailModalOpen(true)
+                }] : []),
                 ...(hasPermission(permissions, 'create-calls') ? [{
                     label: t('Log Call'),
                     icon: <PhoneCall className="h-4 w-4 mr-2" />,
@@ -95,18 +119,19 @@ export default function OpportunityShow() {
                     label: t('Back'),
                     icon: <ArrowLeft className="h-4 w-4 mr-2" />,
                     variant: 'outline' as const,
-                    onClick: () => router.visit(route('opportunities.index'))
+                    onClick: handleBack
                 }
             ]}
             noPadding
         >
             <div className="mx-auto space-y-6">
                 {/* Summary Stat Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     {([
                         { label: t('Amount'), value: formatCurrency(opportunity.amount), icon: DollarSign, iconCls: 'text-emerald-600', blobCls: 'bg-emerald-50 dark:bg-emerald-900/30' },
                         { label: t('Stage'), value: opportunity.opportunity_stage?.name || '—', icon: TrendingUp, iconCls: 'text-blue-600', blobCls: 'bg-blue-50 dark:bg-blue-900/30' },
                         { label: t('Products'), value: `${opportunity.products?.length || 0} ${(opportunity.products?.length || 0) === 1 ? t('item') : t('items')}`, icon: Package, iconCls: 'text-orange-600', blobCls: 'bg-orange-50 dark:bg-orange-900/30' },
+                        { label: t('Last Contacted'), value: opportunity.last_contacted_date ? formatDate(opportunity.last_contacted_date) : t('Never'), icon: PhoneCall, iconCls: 'text-indigo-600', blobCls: 'bg-indigo-50 dark:bg-indigo-900/30' },
                         { label: t('Close Date'), value: formatDate(opportunity.close_date), icon: Clock, iconCls: 'text-purple-600', blobCls: 'bg-purple-50 dark:bg-purple-900/30' },
                     ] as const).map(({ label, value, icon: Icon, iconCls, blobCls }) => (
                         <Card key={label} className="relative overflow-hidden">
@@ -552,6 +577,17 @@ export default function OpportunityShow() {
                 users={users}
                 defaultAssigneeId={opportunity.assigned_to}
                 contactId={opportunity.contact_id}
+            />
+
+            {/* Send Email Modal */}
+            <SendEmailModal
+                isOpen={isSendEmailModalOpen}
+                onClose={() => setIsSendEmailModalOpen(false)}
+                recipientEmail={opportunity.contact?.email || opportunity.account?.email || ''}
+                recipientName={opportunity.contact?.name || opportunity.account?.name || opportunity.name}
+                entityType="opportunity"
+                entityId={opportunity.id}
+                entityName={opportunity.name}
             />
         </PageTemplate>
     );

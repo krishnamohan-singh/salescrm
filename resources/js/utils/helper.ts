@@ -58,11 +58,20 @@ const isDisabledEditRole = (role: string) => {
 }
 
 const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    if (!dateString) return '';
+    const safeDateStr = typeof dateString === 'string' && dateString.includes(' ') && !dateString.includes('T')
+        ? dateString.replace(' ', 'T')
+        : dateString;
+    const date = new Date(safeDateStr);
+    if (isNaN(date.getTime())) return '';
 
-    if (diffInMinutes < 1) return t('Just now');
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    // If future or within 45 seconds
+    if (diffInSeconds < 45) return t('Just now');
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
     if (diffInMinutes < 60) return t('{{count}} {{unit}} ago', { count: diffInMinutes, unit: diffInMinutes === 1 ? t('minute') : t('minutes') });
 
     const diffInHours = Math.floor(diffInMinutes / 60);
@@ -71,7 +80,40 @@ const formatRelativeTime = (dateString: string) => {
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return t('{{count}} {{unit}} ago', { count: diffInDays, unit: diffInDays === 1 ? t('day') : t('days') });
 
-    return window?.appSettings?.formatDateTime(date, false);
+    return window?.appSettings?.formatDateTime(date, false) || date.toLocaleDateString();
+};
+
+const formatSmartDateTime = (dateString: string): string => {
+    if (!dateString) return '';
+    const safeStr = typeof dateString === 'string' && dateString.includes(' ') && !dateString.includes('T')
+        ? dateString.replace(' ', 'T')
+        : dateString;
+    const date = new Date(safeStr);
+    if (isNaN(date.getTime())) return String(dateString);
+
+    const now = new Date();
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) {
+        return t('Today, {{time}}', { time: timeStr });
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    if (isYesterday) {
+        return t('Yesterday, {{time}}', { time: timeStr });
+    }
+
+    const isThisYear = date.getFullYear() === now.getFullYear();
+    const dateStr = date.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        ...(isThisYear ? {} : { year: 'numeric' }),
+    });
+
+    return `${dateStr}, ${timeStr}`;
 };
 
 const getCurrencySymbol = (): string => {
@@ -101,7 +143,8 @@ const capitalize = (str: string): string => {
     return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
-export { getDisplayUrl, isRegistrationEnabled, getTermsAndConditionsUrl, isDisabledEditRole, formatRelativeTime, capitalize, formatCurrency, getCurrencySymbol };
+export { getDisplayUrl, isRegistrationEnabled, getTermsAndConditionsUrl, isDisabledEditRole, formatRelativeTime, formatSmartDateTime, capitalize, formatCurrency, getCurrencySymbol };
+
 
 
 

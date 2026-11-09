@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, FileDown, Lock, Calendar, Banknote, Handshake } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, FileDown, Lock, Calendar, Banknote, Handshake, Mail, TrendingUp, PhoneCall } from 'lucide-react';
+import { SendEmailModal } from '@/components/send-email-modal';
+import { ChangeStageReasonModal } from '@/components/ChangeStageReasonModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,6 +33,8 @@ export default function Opportunities() {
     }, [flash]);
     const permissions = auth?.permissions || [];
     const getInitials = useInitials();
+    const [selectedEmailOpportunity, setSelectedEmailOpportunity] = useState<any>(null);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -39,6 +43,8 @@ export default function Opportunities() {
     const [selectedSource, setSelectedSource] = useState(pageFilters.opportunity_source_id || 'all');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
     const [selectedAssignee, setSelectedAssignee] = useState(pageFilters.assigned_to || 'all');
+    const [selectedDatePeriod, setSelectedDatePeriod] = useState(pageFilters.date_period || 'all');
+    const [selectedDateField, setSelectedDateField] = useState(pageFilters.date_field || 'created_at');
     const [showFilters, setShowFilters] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState<any>(null);
@@ -51,12 +57,21 @@ export default function Opportunities() {
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [dragOverStage, setDragOverStage] = useState<any>(null);
     const isDraggingRef = useRef(false);
-     const [pageInitialState, setPageInitialState] = useState(true);
+    const [pageInitialState, setPageInitialState] = useState(true);
+
+    // Stage and Status Reason Modal state
+    const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+    const [stageModalOpportunity, setStageModalOpportunity] = useState<any>(null);
+    const [stageModalTarget, setStageModalTarget] = useState<any>(null);
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [statusModalOpportunity, setStatusModalOpportunity] = useState<any>(null);
+    const [isUpdatingStage, setIsUpdatingStage] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
     useEffect(() => {
         if (!pageInitialState) applyFilters();
         setPageInitialState(false);
-    }, [selectedStatus, selectedAccount, selectedStage, selectedSource, selectedAssignee]);  
+    }, [selectedStatus, selectedAccount, selectedStage, selectedSource, selectedAssignee, selectedDatePeriod, selectedDateField]);  
 
     const isViewingMyData = selectedAssignee === String(auth?.user?.id);
 
@@ -67,12 +82,12 @@ export default function Opportunities() {
 
     // Check if any filters are active
     const hasActiveFilters = () => {
-        return searchTerm !== '' || selectedAccount !== 'all' || selectedStage !== 'all' || selectedSource !== 'all' || selectedStatus !== 'all' || selectedAssignee !== 'all';
+        return searchTerm !== '' || selectedAccount !== 'all' || selectedStage !== 'all' || selectedSource !== 'all' || selectedStatus !== 'all' || selectedAssignee !== 'all' || selectedDatePeriod !== 'all';
     };
 
     // Count active filters
     const activeFilterCount = () => {
-        return (searchTerm ? 1 : 0) + (selectedAccount !== 'all' ? 1 : 0) + (selectedStage !== 'all' ? 1 : 0) + (selectedSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0);
+        return (searchTerm ? 1 : 0) + (selectedAccount !== 'all' ? 1 : 0) + (selectedStage !== 'all' ? 1 : 0) + (selectedSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0) + (selectedDatePeriod !== 'all' ? 1 : 0);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -90,6 +105,8 @@ export default function Opportunities() {
             opportunity_source_id: selectedSource !== 'all' ? selectedSource : undefined,
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: pageFilters.sort_field || undefined,
             sort_direction: pageFilters.sort_direction || undefined,
             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -107,24 +124,43 @@ export default function Opportunities() {
             opportunity_source_id: selectedSource !== 'all' ? selectedSource : undefined,
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: field,
             sort_direction: direction,
             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
         }, { preserveState: true, preserveScroll: true });
     };
 
+    const saveCurrentListUrl = () => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('opportunities_list_return_url', window.location.pathname + window.location.search);
+        }
+    };
+
+    useEffect(() => {
+        saveCurrentListUrl();
+    }, [opportunities?.current_page, activeView, pageFilters]);
+
     const handleAction = (action: string, item: any) => {
         setCurrentItem(item);
 
         switch (action) {
             case 'view':
+                saveCurrentListUrl();
                 router.get(route('opportunities.show', item.id));
                 break;
             case 'edit':
+                saveCurrentListUrl();
                 router.get(route('opportunities.edit', item.id));
                 break;
             case 'delete':
                 setIsDeleteModalOpen(true);
+                break;
+            case 'change-stage':
+                setStageModalOpportunity(item);
+                setStageModalTarget(null);
+                setIsStageModalOpen(true);
                 break;
             case 'toggle-status':
                 handleToggleStatus(item);
@@ -136,6 +172,7 @@ export default function Opportunities() {
 
     const handleRowClick = (opportunity: any, e?: React.MouseEvent) => {
         if (!canView) return;
+        saveCurrentListUrl();
         if (e && (e.metaKey || e.ctrlKey)) {
             window.open(route('opportunities.show', opportunity.id), '_blank');
             return;
@@ -178,24 +215,72 @@ export default function Opportunities() {
             toast.error(t('Permission denied.'));
             return;
         }
+        setStatusModalOpportunity(opportunity);
+        setIsStatusModalOpen(true);
+    };
 
-        const newStatus = opportunity.status === 'active' ? 'inactive' : 'active';
+    const handleStatusModalConfirm = ({ reason }: { reason: string }) => {
+        if (!statusModalOpportunity) return;
+        const newStatus = statusModalOpportunity.status === 'active' ? 'inactive' : 'active';
+        setIsUpdatingStatus(true);
         toast.loading(t('{{action}} opportunity...', { action: newStatus === 'active' ? t('Activating') : t('Deactivating') }));
 
-        router.put(route('opportunities.toggle-status', opportunity.id), {}, {
+        router.put(route('opportunities.toggle-status', statusModalOpportunity.id), {
+            reason: reason
+        }, {
+            preserveState: true,
+            preserveScroll: true,
             onSuccess: () => {
                 toast.dismiss();
+                toast.success(t('Opportunity status updated successfully'));
+                setIsStatusModalOpen(false);
+                setStatusModalOpportunity(null);
+                setIsUpdatingStatus(false);
                 if (activeView === 'kanban') {
                     loadKanbanData();
                 }
             },
             onError: (errors) => {
                 toast.dismiss();
+                setIsUpdatingStatus(false);
                 if (typeof errors === 'string') {
                     toast.error(errors);
                 } else {
                     toast.error(t('Failed to update: {{errors}}', { errors: Object.values(errors).join(', ') }));
                 }
+            }
+        });
+    };
+
+    const handleStageModalConfirm = ({ newStageId, reason }: { newStageId?: string; reason: string }) => {
+        if (!stageModalOpportunity) return;
+        const targetStageId = newStageId || stageModalTarget?.id;
+        if (!targetStageId) return;
+
+        setIsUpdatingStage(true);
+        toast.loading(t('Updating opportunity stage...'));
+
+        router.put(route('opportunities.update-status', stageModalOpportunity.id), {
+            opportunity_stage_id: targetStageId,
+            reason: reason
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.dismiss();
+                toast.success(t('Opportunity stage updated successfully'));
+                setIsStageModalOpen(false);
+                setStageModalOpportunity(null);
+                setStageModalTarget(null);
+                setIsUpdatingStage(false);
+                if (activeView === 'kanban') {
+                    loadKanbanData();
+                }
+            },
+            onError: (errors) => {
+                toast.dismiss();
+                setIsUpdatingStage(false);
+                toast.error(typeof errors === 'string' ? errors : t('Failed to update opportunity stage'));
             }
         });
     };
@@ -319,17 +404,31 @@ export default function Opportunities() {
         {
             key: 'opportunity_stage',
             label: t('Stage'),
-            render: (value: any) => value ? (
-                <span
-                    className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset"
+            render: (value: any, row: any) => value ? (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasPermission(permissions, 'edit-opportunities')) {
+                            setStageModalOpportunity(row);
+                            setStageModalTarget(null);
+                            setIsStageModalOpen(true);
+                        }
+                    }}
+                    title={hasPermission(permissions, 'edit-opportunities') ? t('Click to change stage') : undefined}
+                    className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-all",
+                        hasPermission(permissions, 'edit-opportunities') && "cursor-pointer hover:opacity-80 hover:scale-105"
+                    )}
                     style={{
                         backgroundColor: value.color ? `${value.color}18` : undefined,
                         color: value.color,
                         borderColor: value.color ? `${value.color}40` : undefined,
                     }}
                 >
-                    {value.name}
-                </span>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: value.color || '#94a3b8' }} />
+                    <span>{value.name}</span>
+                </button>
             ) : t('-')
         },
         {
@@ -340,13 +439,26 @@ export default function Opportunities() {
         {
             key: 'status',
             label: t('Status'),
-            render: (value: string) => (
-                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${value === 'active'
-                    ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
-                    : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-                    }`}>
+            render: (value: string, row: any) => (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasPermission(permissions, 'toggle-status-opportunities')) {
+                            handleToggleStatus(row);
+                        }
+                    }}
+                    title={hasPermission(permissions, 'toggle-status-opportunities') ? t('Click to toggle status') : undefined}
+                    className={cn(
+                        `inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${value === 'active'
+                            ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
+                            : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+                        }`,
+                        hasPermission(permissions, 'toggle-status-opportunities') && "cursor-pointer hover:opacity-80 hover:scale-105 transition-all"
+                    )}
+                >
                     {value === 'active' ? t('Active') : t('Inactive')}
-                </span>
+                </button>
             )
         },
         {
@@ -354,18 +466,45 @@ export default function Opportunities() {
             label: t('Close Date'),
             sortable: true,
             type: 'date',
-            // render: (value: string) => <span className="whitespace-nowrap">{value ? (window.appSettings?.formatDateTime(value, false) || '-') : t('-')}</span>
         },
-        // {
-        //     key: 'created_at',
-        //     label: t('Created At'),
-        //     sortable: true,
-        //     type: 'date',
-        // }
+        {
+            key: 'last_contacted_date',
+            label: t('Last Contacted'),
+            sortable: true,
+            render: (value: any) => {
+                if (!value) {
+                    return (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                            <PhoneCall className="h-3 w-3 text-gray-400" />
+                            {t('Never')}
+                        </span>
+                    );
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        <PhoneCall className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                        {window.appSettings?.formatDateTime(value, false) || new Date(value).toLocaleDateString()}
+                    </span>
+                );
+            }
+        },
+        {
+            key: 'created_at',
+            label: t('Created At'),
+            sortable: true,
+            type: 'date',
+        }
     ];
 
     // Define table actions
     const actions = [
+        {
+            label: t('Change Stage'),
+            icon: 'TrendingUp',
+            action: 'change-stage',
+            className: 'text-indigo-500',
+            requiredPermission: 'edit-opportunities'
+        },
         {
             label: t('Toggle Status'),
             icon: 'Lock',
@@ -484,6 +623,36 @@ export default function Opportunities() {
                                     label: user.name
                                 }))
                             ]
+                        },
+                        {
+                            name: 'date_period',
+                            label: t('Period'),
+                            type: 'select' as const,
+                            value: selectedDatePeriod,
+                            onChange: setSelectedDatePeriod,
+                            options: [
+                                { value: 'all', label: t('All Time') },
+                                { value: 'today', label: t('Today') },
+                                { value: 'yesterday', label: t('Yesterday') },
+                                { value: 'this_week', label: t('This Week') },
+                                { value: 'last_week', label: t('Last Week') },
+                                { value: 'this_month', label: t('This Month') },
+                                { value: 'last_month', label: t('Last Month') },
+                                { value: 'this_year', label: t('This Year') },
+                                { value: 'last_year', label: t('Last Year') },
+                                { value: 'never_contacted', label: t('Never Contacted') },
+                            ]
+                        },
+                        {
+                            name: 'date_field',
+                            label: t('Filter Date By'),
+                            type: 'select' as const,
+                            value: selectedDateField,
+                            onChange: setSelectedDateField,
+                            options: [
+                                { value: 'created_at', label: t('Created Date') },
+                                { value: 'last_contacted_date', label: t('Last Contacted Date') },
+                            ]
                         }
                     ]}
                     // showFilters={showFilters}
@@ -523,6 +692,8 @@ export default function Opportunities() {
                             opportunity_source_id: selectedSource !== 'all' ? selectedSource : undefined,
                             status: selectedStatus !== 'all' ? selectedStatus : undefined,
                             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                             sort_field: pageFilters.sort_field || undefined,
                             sort_direction: pageFilters.sort_direction || undefined,
                             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -565,7 +736,7 @@ export default function Opportunities() {
                         total={opportunities?.total || opportunities?.data?.length || 0}
                         links={opportunities?.links}
                         entityName={t("opportunities")}
-                        onPageChange={(url) => router.get(url)}
+                        onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                         {...(activeView !== 'kanban' && {
                         currentPerPage: pageFilters.per_page?.toString() || "10",
                         onPerPageChange: (value) => {
@@ -578,6 +749,8 @@ export default function Opportunities() {
                                 opportunity_source_id: selectedSource !== 'all' ? selectedSource : undefined,
                                 status: selectedStatus !== 'all' ? selectedStatus : undefined,
                                 assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                                date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                                date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                                 sort_field: pageFilters.sort_field || undefined,
                                 sort_direction: pageFilters.sort_direction || undefined,
                                 ...(parseInt(value) !== 10 && { per_page: parseInt(value) }),
@@ -622,20 +795,11 @@ export default function Opportunities() {
                                         const allItems = Object.values(kanbanData).flatMap((c: any) => c.items);
                                         const currentOpportunity = allItems.find((o: any) => o.id.toString() === opportunityId);
                                         if (!currentOpportunity) return;
-                                        if (currentOpportunity.opportunity_stage?.id === stage.id) return;
-                                        // Optimistic update
-                                        const updated = { ...kanbanData };
-                                        Object.keys(updated).forEach(key => {
-                                            updated[key] = { ...updated[key], items: updated[key].items.filter((o: any) => o.id.toString() !== opportunityId) };
-                                        });
-                                        updated[stage.id] = { ...updated[stage.id], items: [...updated[stage.id].items, { ...currentOpportunity, opportunity_stage: stage }] };
-                                        setKanbanData(updated);
-                                        router.put(route('opportunities.update-status', opportunityId), { opportunity_stage_id: stage.id }, {
-                                            preserveState: true,
-                                            preserveScroll: true,
-                                            onSuccess: () => { toast.dismiss(); },
-                                            onError: () => { toast.dismiss(); toast.error(t('Failed to update opportunity stage')); setKanbanData(kanbanDataRef); }
-                                        });
+                                        if (currentOpportunity.opportunity_stage?.id === stage.id || currentOpportunity.opportunity_stage_id === stage.id) return;
+                                        
+                                        setStageModalOpportunity(currentOpportunity);
+                                        setStageModalTarget(stage);
+                                        setIsStageModalOpen(true);
                                     }}
                                 >
                                     {/* Column header */}
@@ -737,6 +901,16 @@ export default function Opportunities() {
                                                                                 <Edit className="h-4 w-4 mr-2" />{t('Edit')}
                                                                             </DropdownMenuItem>
                                                                         )}
+                                                                        {hasPermission(permissions, 'edit-opportunities') && (
+                                                                            <DropdownMenuItem onClick={() => { setStageModalOpportunity(opportunity); setStageModalTarget(null); setIsStageModalOpen(true); }}>
+                                                                                <TrendingUp className="h-4 w-4 mr-2 text-indigo-500" />{t('Change Stage')}
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {(opportunity.contact?.email || opportunity.account?.email) && (
+                                                                            <DropdownMenuItem onClick={() => { setSelectedEmailOpportunity(opportunity); setIsEmailModalOpen(true); }}>
+                                                                                <Mail className="h-4 w-4 mr-2 text-primary" />{t('Send Email')}
+                                                                            </DropdownMenuItem>
+                                                                        )}
                                                                         {hasPermission(permissions, 'delete-opportunities') && (
                                                                             <>
                                                                                 <DropdownMenuSeparator />
@@ -784,12 +958,36 @@ export default function Opportunities() {
                                                             </div>
                                                         )}
 
+                                                        {/* Stage change reason */}
+                                                        {opportunity.stage_change_reason && (
+                                                            <div className="mb-2 px-2 py-1 rounded bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-200" title={opportunity.stage_change_reason}>
+                                                                <span className="font-semibold text-amber-800 dark:text-amber-300 mr-1">{t('Reason')}:</span>
+                                                                <span className="line-clamp-2">{opportunity.stage_change_reason}</span>
+                                                            </div>
+                                                        )}
+
                                                         {/* Footer: date + assigned avatar */}
                                                         <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                                <Calendar className="h-3 w-3" />
-                                                                <span>
-                                                                    {window.appSettings?.formatDateTime(opportunity.close_date || opportunity.created_at, false) || new Date(opportunity.close_date || opportunity.created_at).toLocaleDateString()}
+                                                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-500">
+                                                                <div className="flex items-center gap-1">
+                                                                    <Calendar className="h-3 w-3" />
+                                                                    <span>
+                                                                        {window.appSettings?.formatDateTime(opportunity.close_date || opportunity.created_at, false) || new Date(opportunity.close_date || opportunity.created_at).toLocaleDateString()}
+                                                                    </span>
+                                                                </div>
+                                                                <span
+                                                                    className={cn(
+                                                                        "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                                                                        opportunity.last_contacted_date
+                                                                            ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800"
+                                                                            : "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700"
+                                                                    )}
+                                                                    title={t('Last Contacted')}
+                                                                >
+                                                                    <PhoneCall className="h-2.5 w-2.5" />
+                                                                    {opportunity.last_contacted_date
+                                                                        ? (window.appSettings?.formatDateTime(opportunity.last_contacted_date, false) || new Date(opportunity.last_contacted_date).toLocaleDateString())
+                                                                        : t('Never')}
                                                                 </span>
                                                             </div>
                                                             {opportunity.assigned_user ? (
@@ -1010,7 +1208,7 @@ export default function Opportunities() {
                             total={opportunities?.total || opportunities?.data?.length || 0}
                             links={opportunities?.links}
                             entityName={t("opportunities")}
-                            onPageChange={(url) => router.get(url)}
+                            onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                             perPageOptions={[12, 24, 48, 96]}
                             currentPerPage={pageFilters.per_page?.toString() || '12'}
                             onPerPageChange={(value) => {
@@ -1039,6 +1237,55 @@ export default function Opportunities() {
                 onConfirm={handleDeleteConfirm}
                 itemName={currentItem?.name || ''}
                 entityName={t('opportunity')}
+            />
+
+            {/* Send Email Modal */}
+            {selectedEmailOpportunity && (
+                <SendEmailModal
+                    isOpen={isEmailModalOpen}
+                    onClose={() => { setIsEmailModalOpen(false); setSelectedEmailOpportunity(null); }}
+                    recipientEmail={selectedEmailOpportunity.contact?.email || selectedEmailOpportunity.account?.email || ''}
+                    recipientName={selectedEmailOpportunity.contact?.name || selectedEmailOpportunity.account?.name || selectedEmailOpportunity.name}
+                    entityType="opportunity"
+                    entityId={selectedEmailOpportunity.id}
+                    entityName={selectedEmailOpportunity.name}
+                />
+            )}
+
+            {/* Stage Change Reason Modal */}
+            <ChangeStageReasonModal
+                isOpen={isStageModalOpen}
+                onClose={() => {
+                    setIsStageModalOpen(false);
+                    setStageModalOpportunity(null);
+                    setStageModalTarget(null);
+                }}
+                onConfirm={handleStageModalConfirm}
+                itemName={stageModalOpportunity?.name || ''}
+                entityType="opportunity"
+                currentStage={stageModalOpportunity ? {
+                    id: stageModalOpportunity.opportunity_stage?.id || stageModalOpportunity.opportunity_stage_id,
+                    name: stageModalOpportunity.opportunity_stage?.name || opportunityStages.find((s: any) => s.id === stageModalOpportunity.opportunity_stage_id)?.name || 'Current Stage',
+                    color: stageModalOpportunity.opportunity_stage?.color || opportunityStages.find((s: any) => s.id === stageModalOpportunity.opportunity_stage_id)?.color
+                } : null}
+                targetStage={stageModalTarget}
+                stages={opportunityStages}
+                isLoading={isUpdatingStage}
+            />
+
+            {/* Status Toggle Reason Modal */}
+            <ChangeStageReasonModal
+                isOpen={isStatusModalOpen}
+                onClose={() => {
+                    setIsStatusModalOpen(false);
+                    setStatusModalOpportunity(null);
+                }}
+                onConfirm={handleStatusModalConfirm}
+                itemName={statusModalOpportunity?.name || ''}
+                entityType="opportunity"
+                isStatusToggle={true}
+                currentStatus={statusModalOpportunity?.status || 'active'}
+                isLoading={isUpdatingStatus}
             />
         </PageTemplate>
     );

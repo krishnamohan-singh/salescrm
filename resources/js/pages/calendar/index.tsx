@@ -2,7 +2,7 @@ import { PageTemplate } from '@/components/page-template';
 import { usePage, router } from '@inertiajs/react';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -18,50 +18,67 @@ import { capitalize } from '@/utils/helper';
 
 export default function CalendarIndex() {
     const { t } = useTranslation();
-    const { events, auth, settings = {}, globalSettings = {} } = usePage().props as any;
+    const { events = [], auth, settings = {}, globalSettings = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
     const isDemo = globalSettings?.is_demo === '1' || globalSettings?.is_demo === true;
-    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [selectedEvent, setSelectedEvent] = useState<any>(null);
     const [showModal, setShowModal] = useState(false);
-    const [activeCalendar, setActiveCalendar] = useState<'local' | 'google'>('local');
+    const [activeCalendar, setActiveCalendar] = useState<'local' | 'google' | 'combined'>('local');
     const [isSyncing, setIsSyncing] = useState(false);
     const [googleEvents, setGoogleEvents] = useState<any[]>([]);
-    const isGoogleCalendarSynced = settings?.is_googlecalendar_sync === '1' || settings?.is_googlecalendar_sync === true;
-    const isGoogleEnabled = settings?.googleCalendarEnabled === '1' || settings?.googleCalendarEnabled === true;
+    const isGoogleEnabled = settings?.googleCalendarEnabled === '1' || settings?.googleCalendarEnabled === true || settings?.is_googlecalendar_sync === '1' || settings?.is_google_calendar_connected === true;
     const Timezone = settings?.defaultTimezone && settings?.defaultTimezone !== '';
 
-    const handleCalendarChange = async (value: 'local' | 'google') => {
-        setActiveCalendar(value);
-        if (value === 'google') {
-            setIsSyncing(true);
-            try {
-                const response = await fetch(route('google-calendar.sync'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    }
-                });
-                const data = await response.json();
-                if (data.success) {
-                    setGoogleEvents(data.events || []);
-                    // toast.success(t('Google Calendar synced successfully'));
-                } else {
-                    toast.error(data.message || t('Failed to sync Google Calendar'));
-                    setActiveCalendar('local');
+    const syncGoogleCalendarEvents = async () => {
+        setIsSyncing(true);
+        try {
+            const response = await fetch(route('google-calendar.sync'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 }
-            } catch (error) {
-                toast.error(t('Failed to sync Google Calendar'));
-                setActiveCalendar('local');
-            } finally {
-                setIsSyncing(false);
+            });
+            const data = await response.json();
+            if (data.success) {
+                setGoogleEvents(data.events || []);
+                toast.success(t('Google Calendar synced successfully'));
+            } else {
+                toast.error(data.message || t('Failed to sync Google Calendar'));
             }
-        } else {
-            setGoogleEvents([]);
+        } catch (error) {
+            toast.error(t('Failed to sync Google Calendar'));
+        } finally {
+            setIsSyncing(false);
         }
     };
 
-    const displayEvents = activeCalendar === 'google' ? googleEvents : events;
+    const handleCalendarChange = async (value: 'local' | 'google' | 'combined') => {
+        setActiveCalendar(value);
+        if (value === 'google' || value === 'combined') {
+            if (googleEvents.length === 0) {
+                await syncGoogleCalendarEvents();
+            }
+        }
+    };
+
+    const displayEvents = useMemo(() => {
+        if (activeCalendar === 'google') {
+            return googleEvents;
+        }
+        if (activeCalendar === 'combined') {
+            const localMeetingIds = new Set(events.filter((e: any) => e.meeting_id).map((e: any) => String(e.meeting_id)));
+            const localCallIds = new Set(events.filter((e: any) => e.call_id).map((e: any) => String(e.call_id)));
+
+            const uniqueGoogleEvents = googleEvents.filter((ge: any) => {
+                if (ge.meeting_id && localMeetingIds.has(String(ge.meeting_id))) return false;
+                if (ge.call_id && localCallIds.has(String(ge.call_id))) return false;
+                return true;
+            });
+            return [...events, ...uniqueGoogleEvents];
+        }
+        return events;
+    }, [activeCalendar, events, googleEvents]);
 
     const handleEventClick = (info: any) => {
         info.jsEvent.preventDefault();
@@ -91,7 +108,7 @@ export default function CalendarIndex() {
             case 'meeting': return 'bg-blue-50 text-blue-700 ring-blue-600/20';
             case 'call': return 'bg-green-50 text-green-700 ring-green-600/20';
             case 'task': return 'bg-amber-50 text-amber-700 ring-amber-600/20';
-            default: return 'bg-gray-50 text-gray-700 ring-gray-600/20';
+            default: return 'bg-indigo-50 text-indigo-700 ring-indigo-600/20';
         }
     };
 
@@ -144,40 +161,60 @@ export default function CalendarIndex() {
     ];
 
     const pageActions = [];
-    if (isGoogleCalendarSynced && isGoogleEnabled) {
+    if (isGoogleEnabled) {
         pageActions.push({
             label: '',
             icon: (
-                <Select value={activeCalendar} onValueChange={handleCalendarChange} disabled={isSyncing}>
-                    <SelectTrigger className="w-40">
-                        <SelectValue>
-                            <div className="flex items-center gap-2">
-                                {isSyncing ? (
-                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <></>
-                                )}
-                                <span>{activeCalendar === 'local' ? t('Local Calendar') : t('Google Calendar')}</span>
-                            </div>
-                        </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="local">
-                            <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                    <Select value={activeCalendar} onValueChange={handleCalendarChange} disabled={isSyncing}>
+                        <SelectTrigger className="w-44">
+                            <SelectValue>
+                                <div className="flex items-center gap-2">
+                                    {isSyncing ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+                                    ) : (
+                                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                    <span>
+                                        {activeCalendar === 'local'
+                                            ? t('Local Calendar')
+                                            : activeCalendar === 'google'
+                                                ? t('Google Calendar')
+                                                : t('All (Local + Google)')}
+                                    </span>
+                                </div>
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="local">
                                 <span>{t('Local Calendar')}</span>
-                            </div>
-                        </SelectItem>
-                        <SelectItem value="google">
-                            <div className="flex items-center gap-2">
+                            </SelectItem>
+                            <SelectItem value="google">
                                 <span>{t('Google Calendar')}</span>
-                            </div>
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
+                            </SelectItem>
+                            <SelectItem value="combined">
+                                <span>{t('All (Local + Google)')}</span>
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {(activeCalendar === 'google' || activeCalendar === 'combined') && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isSyncing}
+                            onClick={syncGoogleCalendarEvents}
+                            title={t('Sync Google Calendar')}
+                        >
+                            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                            <span className="hidden sm:inline ms-1.5">{t('Sync')}</span>
+                        </Button>
+                    )}
+                </div>
             ),
             variant: 'ghost' as const,
             onClick: () => { },
-            className: 'hover:bg-transparent'
+            className: 'hover:bg-transparent p-0'
         });
     }
 
@@ -190,7 +227,7 @@ export default function CalendarIndex() {
         >
             <Card className="p-4">
                 <div className="mb-4 flex flex-wrap gap-4 justify-end">
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex flex-wrap gap-4 items-center">
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
                             <span className="text-sm">{t('Meetings')}</span>
@@ -203,6 +240,12 @@ export default function CalendarIndex() {
                             <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f59e0b' }}></div>
                             <span className="text-sm">{t('Tasks')}</span>
                         </div>
+                        {isGoogleEnabled && (
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#6366f1' }}></div>
+                                <span className="text-sm">{t('Google Calendar')}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <FullCalendar
@@ -256,10 +299,20 @@ export default function CalendarIndex() {
 
                     {selectedEvent && (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className={'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ' + getEventColor(selectedEvent.type || 'event')}>
                                     {selectedEvent.type ? t(capitalize(selectedEvent.type)) : t('Event')}
                                 </span>
+                                {selectedEvent.source === 'google' && (
+                                    <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200">
+                                        {t('Google Calendar')}
+                                    </Badge>
+                                )}
+                                {selectedEvent.is_my_event && (
+                                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                                        {t('My Event')}
+                                    </Badge>
+                                )}
                             </div>
 
                             <div className="space-y-3">

@@ -57,7 +57,7 @@ class LeadObserver
         $userName = auth()->user()?->name ?? 'System';
         
         foreach ($changes as $field => $newValue) {
-            if (in_array($field, ['updated_at'])) continue;
+            if (in_array($field, ['updated_at', 'stage_change_reason', 'last_contacted_date'])) continue;
             
             $oldValue = $original[$field] ?? null;
             if ($field === 'is_converted') continue;
@@ -81,6 +81,11 @@ class LeadObserver
                         $newValues['lead_status_color'] = $newLeadStatus->color;
                     }
                 }
+            }
+
+            if (in_array($field, ['lead_status_id', 'status']) && !empty($lead->stage_change_reason)) {
+                $description .= '<div class="mt-1.5 text-xs text-gray-600 dark:text-gray-300"><span class="font-semibold text-gray-700 dark:text-gray-200">Reason:</span> ' . e($lead->stage_change_reason) . '</div>';
+                $newValues['reason'] = $lead->stage_change_reason;
             }
             
             LeadActivity::create([

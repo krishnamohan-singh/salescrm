@@ -120,7 +120,7 @@ class ProductController extends Controller
             'brands'       => $brands,
             'taxes'        => $taxes,
             'users'        => $users,
-            'existingSkus' => \App\Models\Product::where('created_by', createdBy())->pluck('sku'),
+            'existingSkus' => \App\Models\Product::where('created_by', createdBy())->whereNotNull('sku')->where('sku', '!=', '')->pluck('sku'),
         ]);
     }
 
@@ -128,25 +128,38 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'sku' => 'required|string|max:255|unique:products,sku',
+            'category_id' => 'required|exists:categories,id',
+            'sku' => 'nullable|string|max:255|unique:products,sku',
             'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'stock_quantity' => 'required|integer|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'stock_quantity' => 'nullable|integer|min:0',
             'image' => 'nullable|string',
             'main_image_id' => 'nullable|exists:media,id',
             'additional_image_ids' => 'nullable|array',
             'additional_image_ids.*' => 'exists:media,id',
-            'category_id' => 'required|exists:categories,id',
-            'brand_id' => 'required|exists:brands,id',
-            'tax_id' => 'required|exists:taxes,id',
+            'brand_id' => 'nullable|exists:brands,id',
+            'tax_id' => 'nullable|exists:taxes,id',
             'status' => 'nullable|in:active,inactive',
-            'assigned_to' => 'required|exists:users,id',
+            'assigned_to' => 'nullable|exists:users,id',
         ]);
         try {
 
             $validated['created_by'] = createdBy();
             $validated['status'] = $validated['status'] ?? 'active';
-            $validated['stock_quantity'] = $validated['stock_quantity'] ?? 0;
+            $validated['stock_quantity'] = (isset($validated['stock_quantity']) && $validated['stock_quantity'] !== '') ? (int)$validated['stock_quantity'] : 0;
+            $validated['price'] = (isset($validated['price']) && $validated['price'] !== '') ? (float)$validated['price'] : 0;
+            if (empty($validated['sku'])) {
+                $validated['sku'] = null;
+            }
+            if (empty($validated['brand_id'])) {
+                $validated['brand_id'] = null;
+            }
+            if (empty($validated['tax_id'])) {
+                $validated['tax_id'] = null;
+            }
+            if (empty($validated['assigned_to'])) {
+                $validated['assigned_to'] = null;
+            }
 
             $product = Product::create($validated);
 
@@ -205,7 +218,7 @@ class ProductController extends Controller
                 'users'            => $users,
                 'mainImage'        => $product->main_image_url,
                 'additionalImages' => $product->additional_image_urls,
-                'existingSkus'     => \App\Models\Product::where('created_by', createdBy())->where('id', '!=', $id)->pluck('sku'),
+                'existingSkus'     => \App\Models\Product::where('created_by', createdBy())->where('id', '!=', $id)->whereNotNull('sku')->where('sku', '!=', '')->pluck('sku'),
             ]);
         } else {
             return redirect()->route('products.index')->with('error', __('Product not found.'));
@@ -221,22 +234,37 @@ class ProductController extends Controller
         if ($product) {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'sku' => 'required|string|max:255|unique:products,sku,' . $productId,
+                'category_id' => 'required|exists:categories,id',
+                'sku' => 'nullable|string|max:255|unique:products,sku,' . $productId,
                 'description' => 'nullable|string',
-                'price' => 'required|numeric|min:0',
+                'price' => 'nullable|numeric|min:0',
                 'stock_quantity' => 'nullable|integer|min:0',
                 'image' => 'nullable|string',
                 'main_image_id' => 'nullable|exists:media,id',
                 'additional_image_ids' => 'nullable|array',
                 'additional_image_ids.*' => 'exists:media,id',
-                'category_id' => 'required|exists:categories,id',
-                'brand_id' => 'required|exists:brands,id',
-                'tax_id' => 'required|exists:taxes,id',
+                'brand_id' => 'nullable|exists:brands,id',
+                'tax_id' => 'nullable|exists:taxes,id',
                 'status' => 'nullable|in:active,inactive',
-                'assigned_to' => 'required|exists:users,id',
+                'assigned_to' => 'nullable|exists:users,id',
             ]);
 
             try {
+                $validated['stock_quantity'] = (isset($validated['stock_quantity']) && $validated['stock_quantity'] !== '') ? (int)$validated['stock_quantity'] : 0;
+                $validated['price'] = (isset($validated['price']) && $validated['price'] !== '') ? (float)$validated['price'] : 0;
+                if (empty($validated['sku'])) {
+                    $validated['sku'] = null;
+                }
+                if (empty($validated['brand_id'])) {
+                    $validated['brand_id'] = null;
+                }
+                if (empty($validated['tax_id'])) {
+                    $validated['tax_id'] = null;
+                }
+                if (empty($validated['assigned_to'])) {
+                    $validated['assigned_to'] = null;
+                }
+
                 $product->update($validated);
 
                 return redirect()->route('products.index')->with('success', __('Product updated successfully.'));

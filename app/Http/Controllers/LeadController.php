@@ -70,10 +70,18 @@ class LeadController extends Controller
             });
         }
 
+        // Handle date period filters
+        if ($request->filled('date_period') && $request->date_period !== 'all') {
+            $dateField = in_array($request->date_field, ['last_contacted_date', 'created_at']) ? $request->date_field : 'created_at';
+            $this->applyDatePeriodFilter($query, $request->date_period, $dateField);
+        } elseif ($request->filled('last_contacted_period') && $request->last_contacted_period !== 'all') {
+            $this->applyDatePeriodFilter($query, $request->last_contacted_period, 'last_contacted_date');
+        }
+
         // Handle sorting
         $sortField = $request->input('sort_field', 'id');
         $sortDirection = $request->input('sort_direction', 'desc');
-        $allowedSorts = ['id', 'name', 'value', 'created_at'];
+        $allowedSorts = ['id', 'name', 'value', 'created_at', 'last_contacted_date'];
         $allowedDirection = ['asc', 'desc'];
         if (!in_array($sortDirection, $allowedDirection)) {
             $sortDirection = 'desc';
@@ -124,7 +132,7 @@ class LeadController extends Controller
             'allUsers' => $allUsers,
             'canViewAll' => $canViewAll,
             'samplePath' => file_exists(storage_path('uploads/sample/sample-lead.xlsx')) ? route('lead.download.template') : null,
-            'filters' => $request->all(['view', 'search', 'lead_status_id', 'lead_source_id', 'status', 'is_converted', 'assigned_to', 'created_by', 'sort_field', 'sort_direction', 'per_page', 'page']),
+            'filters' => $request->all(['view', 'search', 'lead_status_id', 'lead_source_id', 'status', 'is_converted', 'assigned_to', 'created_by', 'date_period', 'date_field', 'last_contacted_period', 'sort_field', 'sort_direction', 'per_page', 'page']),
         ]);
     }
 
@@ -182,6 +190,7 @@ class LeadController extends Controller
             'campaign_id' => 'nullable|exists:campaigns,id',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'nullable|exists:users,id',
+            'last_contacted_date' => 'nullable|date',
             'services' => 'nullable|array',
             'services.*' => 'string|max:255',
         ]);
@@ -300,6 +309,11 @@ class LeadController extends Controller
             ->with(['category:id,name', 'tax:id,name,rate'])
             ->orderBy('name')
             ->get();
+        try {
+            app(\App\Services\GoogleMailService::class)->syncEntityActivities('lead', $lead, $tenantId);
+        } catch (\Throwable $e) {
+            \Log::warning('Error syncing lead email activities: ' . $e->getMessage());
+        }
 
         return Inertia::render('leads/show', [
             'lead'            => $lead,
@@ -494,10 +508,17 @@ class LeadController extends Controller
                     'campaign_id' => 'nullable|exists:campaigns,id',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'nullable|exists:users,id',
+                    'last_contacted_date' => 'nullable|date',
                     'services' => 'nullable|array',
                     'services.*' => 'string|max:255',
+                    'stage_change_reason' => 'nullable|string|max:1000',
+                    'reason' => 'nullable|string|max:1000',
                 ]);
             try {
+                if ($request->filled('reason')) {
+                    $validated['stage_change_reason'] = $request->input('reason');
+                }
+                unset($validated['reason']);
                 if (isset($validated['assigned_to']) && $validated['assigned_to'] != $lead->assigned_to && !auth()->user()->can('assign-leads')) {
                     unset($validated['assigned_to']);
                 }
@@ -542,7 +563,7 @@ class LeadController extends Controller
         }
     }
 
-    public function toggleStatus($leadId)
+    public function toggleStatus(Request $request, $leadId)
     {
         $lead = Lead::where('id', $leadId)
             ->where('created_by', createdBy())
@@ -551,6 +572,9 @@ class LeadController extends Controller
         if ($lead) {
             try {
                 $lead->status = $lead->status === 'active' ? 'inactive' : 'active';
+                if ($request->filled('reason')) {
+                    $lead->stage_change_reason = $request->input('reason');
+                }
                 $lead->save();
 
                 return redirect()->back()->with('success', __('Lead status updated successfully.'));
@@ -590,15 +614,21 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'lead_status_id' => 'required|exists:lead_statuses,id',
+            'reason' => 'nullable|string|max:1000',
         ]);
 
         $lead = Lead::where('id', $leadId)
             ->where('created_by', createdBy())
             ->firstOrFail();
 
-        $lead->update([
+        $updateData = [
             'lead_status_id' => $validated['lead_status_id']
-        ]);
+        ];
+        if ($request->filled('reason')) {
+            $updateData['stage_change_reason'] = $request->input('reason');
+        }
+
+        $lead->update($updateData);
 
         return redirect()->back()->with('success', __('Lead status updated successfully.'));
     }
@@ -957,6 +987,73 @@ class LeadController extends Controller
             return redirect()->back()->with('success', $message);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', __('Failed to import: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Apply date period filter to a query.
+     */
+    protected function applyDatePeriodFilter($query, $period, $dateField = 'created_at')
+    {
+        if (empty($period) || $period === 'all') {
+            return;
+        }
+
+        if (!in_array($dateField, ['created_at', 'last_contacted_date'])) {
+            $dateField = 'created_at';
+        }
+
+        if ($period === 'never_contacted') {
+            $query->whereNull('last_contacted_date');
+            return;
+        }
+
+        if ($period === 'contacted') {
+            $query->whereNotNull('last_contacted_date');
+            return;
+        }
+
+        $now = \Carbon\Carbon::now();
+        $start = null;
+        $end = null;
+
+        switch ($period) {
+            case 'today':
+                $start = \Carbon\Carbon::today()->startOfDay();
+                $end = \Carbon\Carbon::today()->endOfDay();
+                break;
+            case 'yesterday':
+                $start = \Carbon\Carbon::yesterday()->startOfDay();
+                $end = \Carbon\Carbon::yesterday()->endOfDay();
+                break;
+            case 'this_week':
+                $start = $now->copy()->startOfWeek();
+                $end = $now->copy()->endOfWeek();
+                break;
+            case 'last_week':
+                $start = $now->copy()->subWeek()->startOfWeek();
+                $end = $now->copy()->subWeek()->endOfWeek();
+                break;
+            case 'this_month':
+                $start = $now->copy()->startOfMonth();
+                $end = $now->copy()->endOfMonth();
+                break;
+            case 'last_month':
+                $start = $now->copy()->subMonth()->startOfMonth();
+                $end = $now->copy()->subMonth()->endOfMonth();
+                break;
+            case 'this_year':
+                $start = $now->copy()->startOfYear();
+                $end = $now->copy()->endOfYear();
+                break;
+            case 'last_year':
+                $start = $now->copy()->subYear()->startOfYear();
+                $end = $now->copy()->subYear()->endOfYear();
+                break;
+        }
+
+        if ($start && $end) {
+            $query->whereBetween($dateField, [$start, $end]);
         }
     }
 }

@@ -224,7 +224,7 @@ export default function Products() {
                         </div>
                         <div>
                             <div className="font-semibold text-gray-900 dark:text-white">{row.name}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">SKU: {row.sku}</div>
+                            {row.sku && <div className="text-sm text-gray-500 dark:text-gray-400">SKU: {row.sku}</div>}
                         </div>
                     </div>
                 );
@@ -556,7 +556,9 @@ export default function Products() {
                                         <div>
                                             <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-snug line-clamp-2">{product.name}</h3>
                                             <div className="flex items-center justify-between mt-0.5">
-                                                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-mono tracking-wide">#{product.sku}</p>
+                                                {product.sku ? (
+                                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 font-mono tracking-wide">#{product.sku}</p>
+                                                ) : <span />}
                                                 {product.tax && <span className="text-[11px] text-gray-500 dark:text-gray-400">{t('Tax')}: {product.tax.rate != null ? `${product.tax.rate}%` : product.tax.name}</span>}
                                             </div>
                                         </div>
@@ -689,11 +691,11 @@ export default function Products() {
                 importNotes={t('Ensure that the values entered for Category, Brand, Tax match the existing records in your system.')}
                 databaseFields={[
                     { key: 'name', required: true },
-                    { key: 'sku', required: true },
+                    { key: 'category', required: true },
+                    { key: 'sku' },
                     { key: 'description' },
-                    { key: 'price', required: true },
-                    { key: 'stock', required: true },
-                    { key: 'category' },
+                    { key: 'price' },
+                    { key: 'stock' },
                     { key: 'brand' },
                     { key: 'tax' },
                     { key: 'status' }

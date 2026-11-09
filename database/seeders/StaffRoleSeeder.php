@@ -1110,11 +1110,10 @@ class StaffRoleSeeder extends Seeder
                 // Assign permissions to role
                 $role->syncPermissions($permissionObjects);
 
-                // Create 2-3 staff users for each role (total 10-15 per company)
-                if (IsDemo()) {
+                // Only create sample staff users in demo mode specifically for the default demo company
+                $staffCount = 0;
+                if (IsDemo() && $company->email === 'company@example.com') {
                     $staffCount = rand(2, 3);
-                } else {
-                    $staffCount = 1;
                 }
 
                 for ($i = 0; $i < $staffCount; $i++) {

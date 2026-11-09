@@ -34,7 +34,7 @@ export default function Calls() {
             return null;
         }).filter(Boolean);
     const permissions = auth?.permissions || [];
-    const isGoogleCalendarSynced = settings?.googleCalendarEnabled === '1';
+    const isGoogleCalendarSynced = settings?.googleCalendarEnabled === '1' || settings?.googleCalendarEnabled === true || settings?.is_googlecalendar_sync === '1' || settings?.is_google_calendar_connected === true;
 
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
@@ -508,18 +508,19 @@ export default function Calls() {
                 onSubmit={handleFormSubmit}
                 formConfig={{
                     fields: [
-                        { name: 'title', label: t('Call Title'), type: 'text' as const, required: true, placeholder: t('e.g. Follow-up Call, Sales Discovery, Support Call') },
-                        { name: 'description', label: t('Description'), type: 'textarea' as const, placeholder: t('Enter call description or agenda...') },
-                        { name: 'start_date', label: t('Start Date'), type: 'date' as const, required: true },
-                        { name: 'end_date', label: t('End Date'), type: 'date' as const, required: true },
-                        { name: 'start_time', label: t('Start Time'), type: 'time' as const, required: true },
-                        { name: 'end_time', label: t('End Time'), type: 'time' as const, required: true },
+                        { name: 'title', label: t('Call Title'), type: 'text' as const, required: false, placeholder: t('e.g. Follow-up Call, Sales Discovery, Support Call') },
+                        { name: 'description', label: t('Description'), type: 'textarea' as const, required: false, placeholder: t('Enter call description or agenda...') },
+                        { name: 'start_date', label: t('Start Date'), type: 'date' as const, required: false },
+                        { name: 'end_date', label: t('End Date'), type: 'date' as const, required: false },
+                        { name: 'start_time', label: t('Start Time'), type: 'time' as const, required: false },
+                        { name: 'end_time', label: t('End Time'), type: 'time' as const, required: false },
                         {
                             name: 'parent_module',
                             label: t('Related To'),
                             type: 'select' as const,
-                            required: true,
+                            required: false,
                             options: [
+                                { value: 'none', label: t('None') },
                                 { value: 'lead', label: t('Lead') },
                                 { value: 'account', label: t('Account') },
                                 { value: 'contact', label: t('Contact') },
@@ -532,7 +533,7 @@ export default function Calls() {
                             name: 'parent_id',
                             label: t('Select Record'),
                             type: 'select' as const,
-                            required: true,
+                            required: false,
                             searchable: true,
                             options: [],
                             placeholder: t('Select Record'),
@@ -566,13 +567,13 @@ export default function Calls() {
                             name: 'attendees',
                             label: t('Attendees'),
                             type: 'array' as const,
-                            required: true,
+                            required: false,
                             fields: [
                                 {
                                     name: 'type',
                                     label: t('Type'),
                                     type: 'select' as const,
-                                    required: true,
+                                    required: false,
                                     options: [
                                         { value: 'user', label: t('User') },
                                         { value: 'contact', label: t('Contact') },
@@ -583,7 +584,7 @@ export default function Calls() {
                                     name: 'id',
                                     label: t('Select Person'),
                                     type: 'select' as const,
-                                    required: true,
+                                    required: false,
                                     searchable: true,
                                     options: [],
                                     emptyNote: (formData: any, arrayIndex?: number) => {
@@ -610,10 +611,11 @@ export default function Calls() {
                             name: 'assigned_to',
                             label: t('Assign To'),
                             type: 'select' as const,
-                            required: true,
+                            required: false,
                             searchable: true,
                             emptyNote: { link: route('users.index'), linkText: t('Users') },
                             options: [
+                                { value: 'unassigned', label: t('Unassigned') },
                                 ...users.map((user: any) => ({ value: user.id, label: `${user.name} (${user.email})` }))
                             ]
                         },
@@ -621,6 +623,7 @@ export default function Calls() {
                             name: 'status',
                             label: t('Status'),
                             type: 'select' as const,
+                            required: false,
                             options: [
                                 { value: 'planned', label: t('Planned') },
                                 { value: 'held', label: t('Held') },
@@ -632,19 +635,20 @@ export default function Calls() {
                             name: 'sync_with_google_calendar',
                             label: t('Sync with Google Calendar'),
                             type: 'switch' as const,
+                            required: false,
                             defaultValue: false,
-                            conditional: (mode: string) => mode === 'create'
                         }] : [])
                     ],
                     modalSize: 'xl'
                 }}
                 initialData={currentItem ? {
                     ...currentItem,
+                    sync_with_google_calendar: Boolean(currentItem.google_calendar_event_id),
                     attendees: currentItem.attendees?.map((attendee: any) => ({
                         type: attendee.attendee_type,
                         id: attendee.attendee_id
                     })) || []
-                } : {}}
+                } : { sync_with_google_calendar: false }}
                 title={
                     formMode === 'create'
                         ? t('Add Call')

@@ -42,10 +42,14 @@ class MeetingController extends Controller
             }
             $meetingDates = $meetingDates->toArray();
         } else {
-            // --- Date filter: filter meetings where selected date falls within start_date and end_date ---
+            // --- Date filter: filter meetings where selected date falls within start_date and end_date (or start_date is null) ---
             $meetings = (clone $baseQuery)
-                ->whereDate('start_date', '<=', $selectedDate)
-                ->whereDate('end_date', '>=', $selectedDate)
+                ->where(function($q) use ($selectedDate) {
+                    $q->where(function($sq) use ($selectedDate) {
+                        $sq->whereDate('start_date', '<=', $selectedDate)
+                           ->whereDate('end_date', '>=', $selectedDate);
+                    })->orWhereNull('start_date');
+                })
                 ->get();
 
             // --- Meeting dates for the selected month (for calendar dots, including multi-day) ---
@@ -79,6 +83,12 @@ class MeetingController extends Controller
         $allContacts = \App\Models\Contact::where('created_by', createdBy())->select('id', 'name')->get();
         $allLeads    = \App\Models\Lead::where('created_by', createdBy())->select('id', 'name')->get();
 
+        $calendarService = new GoogleCalendarService();
+        $calSettings = settings(createdBy()) ?: [];
+        if ($calendarService->isEnabled(auth()->id())) {
+            $calSettings['googleCalendarEnabled'] = '1';
+        }
+
         return Inertia::render('meetings/index', [
             'meetings'      => $meetings,
             'users'         => $users,
@@ -91,7 +101,7 @@ class MeetingController extends Controller
             'selectedMonth' => $selectedMonth,
             'selectedYear'  => $selectedYear,
             'filters'       => $request->all(['search', 'status', 'assigned_to', 'sort_field', 'sort_direction', 'date', 'month', 'year']),
-            'settings'      => settings(createdBy()),
+            'settings'      => $calSettings,
         ]);
     }
 
@@ -150,36 +160,44 @@ class MeetingController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:65535',
-            'location' => 'required|string|max:255',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i',
-            'parent_module' => 'required|in:none,lead,account,contact,opportunity,case,project',
-            'parent_id' => 'required|integer|min:1',
+            'location' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'start_time' => 'nullable',
+            'end_time' => 'nullable',
+            'parent_module' => 'nullable|in:none,lead,account,contact,opportunity,case,project',
+            'parent_id' => 'nullable',
             'status' => 'nullable|in:planned,held,not_held',
-            'assigned_to' => 'required|exists:users,id',
-            'attendees' => 'required|array|min:1',
-            'attendees.*.type' => 'required_with:attendees|in:user,contact,lead',
-            'attendees.*.id' => 'required_with:attendees|integer|min:1',
+            'assigned_to' => 'nullable',
+            'attendees' => 'nullable|array',
+            'attendees.*.type' => 'nullable|in:user,contact,lead',
+            'attendees.*.id' => 'nullable',
             'sync_with_google_calendar' => 'nullable|boolean',
         ]);
 
         $validated['created_by'] = createdBy();
         $validated['status'] = $validated['status'] ?? 'planned';
+        $validated['title'] = !empty(trim($validated['title'] ?? '')) ? trim($validated['title']) : __('Untitled Meeting');
 
-        $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
-        $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
-        $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDate . ' ' . $validated['start_time']);
-        $endDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $endDate . ' ' . $validated['end_time']);
-        if ($endDateTime->lte($startDateTime)) {
-            return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+        $startDateTime = null;
+        $endDateTime = null;
+        if (!empty($validated['start_date']) && !empty($validated['start_time']) && !empty($validated['end_date']) && !empty($validated['end_time'])) {
+            $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
+            $startDateTime = \Carbon\Carbon::parse($startDate . ' ' . $validated['start_time']);
+            $endDateTime = \Carbon\Carbon::parse($endDate . ' ' . $validated['end_time']);
+            if ($endDateTime->lte($startDateTime)) {
+                return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+            }
         }
 
-        if (isset($validated['attendees'])) {
+        if ($startDateTime && $endDateTime && isset($validated['attendees']) && is_array($validated['attendees'])) {
             foreach ($validated['attendees'] as $attendee) {
+                if (empty($attendee['type']) || empty($attendee['id'])) {
+                    continue;
+                }
                 $meetingConflict = MeetingAttendee::where('attendee_type', $attendee['type'])
                     ->where('attendee_id', $attendee['id'])
                     ->whereHas('meeting', function ($q) use ($startDateTime, $endDateTime) {
@@ -207,9 +225,9 @@ class MeetingController extends Controller
             }
         }
 
-        $validated['parent_module'] = ($validated['parent_module'] ?? null) === 'none' ? null : ($validated['parent_module'] ?? null);
-        $validated['parent_id'] = empty($validated['parent_id']) || $validated['parent_id'] === 'select' ? null : (int)$validated['parent_id'];
-        $validated['assigned_to'] = empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned' ? null : (int)$validated['assigned_to'];
+        $validated['parent_module'] = (empty($validated['parent_module']) || $validated['parent_module'] === 'none') ? null : $validated['parent_module'];
+        $validated['parent_id'] = (empty($validated['parent_id']) || $validated['parent_id'] === 'select') ? null : (int)$validated['parent_id'];
+        $validated['assigned_to'] = (empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned') ? null : (int)$validated['assigned_to'];
 
         if ($validated['parent_module'] && $validated['parent_id']) {
             $this->validateParentRecord($validated['parent_module'], $validated['parent_id']);
@@ -217,7 +235,20 @@ class MeetingController extends Controller
 
         $meeting = Meeting::create($validated);
 
-        if ($meeting && $request->sync_with_google_calendar) {
+        if (isset($validated['attendees']) && is_array($validated['attendees'])) {
+            foreach ($validated['attendees'] as $attendee) {
+                if (!empty($attendee['type']) && !empty($attendee['id'])) {
+                    MeetingAttendee::create([
+                        'meeting_id' => $meeting->id,
+                        'attendee_type' => $attendee['type'],
+                        'attendee_id' => $attendee['id'],
+                    ]);
+                }
+            }
+        }
+
+        if ($meeting && $request->sync_with_google_calendar && $meeting->start_date) {
+            $meeting->load('attendees');
             $calendarService = new GoogleCalendarService();
             $eventId = $calendarService->createEvent($meeting, createdBy(), 'meeting');
             if ($eventId) {
@@ -225,67 +256,105 @@ class MeetingController extends Controller
             }
         }
 
-        if (isset($validated['attendees'])) {
-            foreach ($validated['attendees'] as $attendee) {
-                MeetingAttendee::create([
-                    'meeting_id' => $meeting->id,
-                    'attendee_type' => $attendee['type'],
-                    'attendee_id' => $attendee['id'],
-                ]);
-            }
-        }
-
         // Create activity for parent modules
         if ($meeting->parent_module && $meeting->parent_id) {
+            $meetingContactDate = now();
+            if ($meeting->start_date) {
+                try {
+                    $meetingTime = $meeting->start_time ?: '00:00:00';
+                    $meetingContactDate = \Carbon\Carbon::parse($meeting->start_date . ' ' . $meetingTime);
+                } catch (\Exception $e) {}
+            }
+
+            $meetingTimeText = $meeting->start_date
+                ? ('Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ($meeting->start_time ? ' at ' . date('g:i A', strtotime($meeting->start_time)) : ''))
+                : 'Meeting scheduled';
+
             switch ($meeting->parent_module) {
                 case 'account':
+                    \App\Models\Account::where('id', $meeting->parent_id)->update(['last_contacted_date' => $meetingContactDate]);
                     \App\Models\AccountActivity::create([
                         'account_id' => $meeting->parent_id,
                         'user_id' => auth()->id(),
                         'activity_type' => 'Meeting Created',
                         'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title,
-                        'description' => 'Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ' at ' . date('g:i A', strtotime($meeting->start_time)),
+                        'description' => $meetingTimeText,
                         'created_by' => createdBy()
                     ]);
                     break;
                 case 'lead':
+                    \App\Models\Lead::where('id', $meeting->parent_id)->update(['last_contacted_date' => $meetingContactDate]);
                     \App\Models\LeadActivity::create([
                         'lead_id' => $meeting->parent_id,
                         'user_id' => auth()->id(),
                         'activity_type' => 'Meeting Created',
                         'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title,
-                        'description' => 'Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ' at ' . date('g:i A', strtotime($meeting->start_time)),
+                        'description' => $meetingTimeText,
                         'created_by' => createdBy()
                     ]);
                     break;
                 case 'opportunity':
+                    \App\Models\Opportunity::where('id', $meeting->parent_id)->update(['last_contacted_date' => $meetingContactDate]);
                     \App\Models\OpportunityActivity::create([
                         'opportunity_id' => $meeting->parent_id,
                         'user_id' => auth()->id(),
                         'activity_type' => 'Meeting Created',
                         'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title,
-                        'description' => 'Meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)) . ' at ' . date('g:i A', strtotime($meeting->start_time)),
+                        'description' => $meetingTimeText,
                         'created_by' => createdBy()
                     ]);
+                    break;
+                case 'contact':
+                    \App\Models\ContactActivity::create([
+                        'contact_id' => $meeting->parent_id,
+                        'user_id' => auth()->id(),
+                        'activity_type' => 'Meeting Created',
+                        'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title,
+                        'description' => $meetingTimeText,
+                        'created_by' => createdBy()
+                    ]);
+                    $contact = \App\Models\Contact::find($meeting->parent_id);
+                    if ($contact && $contact->account_id) {
+                        \App\Models\Account::where('id', $contact->account_id)->update(['last_contacted_date' => $meetingContactDate]);
+                        \App\Models\AccountActivity::create([
+                            'account_id' => $contact->account_id,
+                            'user_id' => auth()->id(),
+                            'activity_type' => 'Meeting Created',
+                            'title' => auth()->user()->name . ' created a meeting: ' . $meeting->title . ' (Contact: ' . $contact->name . ')',
+                            'description' => $meetingTimeText,
+                            'created_by' => createdBy()
+                        ]);
+                    }
                     break;
             }
         }
 
         // Create activity for attendees
         if (isset($validated['attendees'])) {
+            $attendeeDateText = $meeting->start_date ? (' scheduled for ' . date('M j, Y', strtotime($meeting->start_date))) : '';
             foreach ($validated['attendees'] as $attendee) {
                 switch ($attendee['type']) {
                     case 'contact':
                         $contact = \App\Models\Contact::find($attendee['id']);
-                        if ($contact && $contact->account_id) {
-                            \App\Models\AccountActivity::create([
-                                'account_id' => $contact->account_id,
+                        if ($contact) {
+                            \App\Models\ContactActivity::create([
+                                'contact_id' => $contact->id,
                                 'user_id' => auth()->id(),
                                 'activity_type' => 'Meeting Attendee',
-                                'title' => auth()->user()->name . ' added ' . $contact->name . ' to meeting: ' . $meeting->title,
-                                'description' => 'Contact added as attendee to meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)),
+                                'title' => auth()->user()->name . ' added contact to meeting: ' . $meeting->title,
+                                'description' => 'Contact added as attendee to meeting' . $attendeeDateText,
                                 'created_by' => createdBy()
                             ]);
+                            if ($contact->account_id) {
+                                \App\Models\AccountActivity::create([
+                                    'account_id' => $contact->account_id,
+                                    'user_id' => auth()->id(),
+                                    'activity_type' => 'Meeting Attendee',
+                                    'title' => auth()->user()->name . ' added ' . $contact->name . ' to meeting: ' . $meeting->title,
+                                    'description' => 'Contact added as attendee to meeting' . $attendeeDateText,
+                                    'created_by' => createdBy()
+                                ]);
+                            }
                         }
                         break;
                     case 'lead':
@@ -296,7 +365,7 @@ class MeetingController extends Controller
                                 'user_id' => auth()->id(),
                                 'activity_type' => 'Meeting Attendee',
                                 'title' => auth()->user()->name . ' added ' . $lead->name . ' to meeting: ' . $meeting->title,
-                                'description' => 'Lead added as attendee to meeting scheduled for ' . date('M j, Y', strtotime($meeting->start_date)),
+                                'description' => 'Lead added as attendee to meeting' . $attendeeDateText,
                                 'created_by' => createdBy()
                             ]);
                         }
@@ -337,33 +406,45 @@ class MeetingController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:65535',
-            'location' => 'required|string|max:255',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i',
-            'parent_module' => 'required|in:none,lead,account,contact,opportunity,case,project',
-            'parent_id' => 'required|integer|min:1',
+            'location' => 'nullable|string|max:255',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'start_time' => 'nullable',
+            'end_time' => 'nullable',
+            'parent_module' => 'nullable|in:none,lead,account,contact,opportunity,case,project',
+            'parent_id' => 'nullable',
             'status' => 'nullable|in:planned,held,not_held',
-            'assigned_to' => 'required|exists:users,id',
-            'attendees' => 'required|array|min:1',
-            'attendees.*.type' => 'required_with:attendees|in:user,contact,lead',
-            'attendees.*.id' => 'required_with:attendees|integer|min:1',
+            'assigned_to' => 'nullable',
+            'attendees' => 'nullable|array',
+            'attendees.*.type' => 'nullable|in:user,contact,lead',
+            'attendees.*.id' => 'nullable',
             'sync_with_google_calendar' => 'nullable|boolean',
         ]);
 
-        $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
-        $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
-        $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDate . ' ' . $validated['start_time']);
-        $endDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $endDate . ' ' . $validated['end_time']);
-        if ($endDateTime->lte($startDateTime)) {
-            return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+        $validated['status'] = $validated['status'] ?? 'planned';
+        if (isset($validated['title'])) {
+            $validated['title'] = !empty(trim($validated['title'])) ? trim($validated['title']) : __('Untitled Meeting');
         }
 
-        if (isset($validated['attendees'])) {
+        $startDateTime = null;
+        $endDateTime = null;
+        if (!empty($validated['start_date']) && !empty($validated['start_time']) && !empty($validated['end_date']) && !empty($validated['end_time'])) {
+            $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
+            $startDateTime = \Carbon\Carbon::parse($startDate . ' ' . $validated['start_time']);
+            $endDateTime = \Carbon\Carbon::parse($endDate . ' ' . $validated['end_time']);
+            if ($endDateTime->lte($startDateTime)) {
+                return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+            }
+        }
+
+        if ($startDateTime && $endDateTime && isset($validated['attendees']) && is_array($validated['attendees'])) {
             foreach ($validated['attendees'] as $attendee) {
+                if (empty($attendee['type']) || empty($attendee['id'])) {
+                    continue;
+                }
                 $meetingConflict = MeetingAttendee::where('attendee_type', $attendee['type'])
                     ->where('attendee_id', $attendee['id'])
                     ->whereHas('meeting', function ($q) use ($startDateTime, $endDateTime, $meetingId) {
@@ -392,9 +473,9 @@ class MeetingController extends Controller
             }
         }
 
-        $validated['parent_module'] = ($validated['parent_module'] ?? null) === 'none' ? null : ($validated['parent_module'] ?? null);
-        $validated['parent_id'] = empty($validated['parent_id']) || $validated['parent_id'] === 'select' ? null : (int)$validated['parent_id'];
-        $validated['assigned_to'] = empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned' ? null : (int)$validated['assigned_to'];
+        $validated['parent_module'] = (empty($validated['parent_module']) || $validated['parent_module'] === 'none') ? null : $validated['parent_module'];
+        $validated['parent_id'] = (empty($validated['parent_id']) || $validated['parent_id'] === 'select') ? null : (int)$validated['parent_id'];
+        $validated['assigned_to'] = (empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned') ? null : (int)$validated['assigned_to'];
 
         if ($validated['parent_module'] && $validated['parent_id']) {
             $this->validateParentRecord($validated['parent_module'], $validated['parent_id']);
@@ -402,19 +483,29 @@ class MeetingController extends Controller
 
         $meeting->update($validated);
 
-        if ($meeting->google_calendar_event_id) {
-            $calendarService = new GoogleCalendarService();
-            $calendarService->updateEvent($meeting->google_calendar_event_id, $meeting, createdBy(), 'meeting');
+        $meeting->attendees()->delete();
+        if (isset($validated['attendees']) && is_array($validated['attendees'])) {
+            foreach ($validated['attendees'] as $attendee) {
+                if (!empty($attendee['type']) && !empty($attendee['id'])) {
+                    MeetingAttendee::create([
+                        'meeting_id' => $meeting->id,
+                        'attendee_type' => $attendee['type'],
+                        'attendee_id' => $attendee['id'],
+                    ]);
+                }
+            }
         }
 
-        $meeting->attendees()->delete();
-        if (isset($validated['attendees'])) {
-            foreach ($validated['attendees'] as $attendee) {
-                MeetingAttendee::create([
-                    'meeting_id' => $meeting->id,
-                    'attendee_type' => $attendee['type'],
-                    'attendee_id' => $attendee['id'],
-                ]);
+        $meeting->load('attendees');
+
+        if ($meeting->google_calendar_event_id && $meeting->start_date) {
+            $calendarService = new GoogleCalendarService();
+            $calendarService->updateEvent($meeting->google_calendar_event_id, $meeting, createdBy(), 'meeting');
+        } elseif ($request->sync_with_google_calendar && $meeting->start_date) {
+            $calendarService = new GoogleCalendarService();
+            $eventId = $calendarService->createEvent($meeting, createdBy(), 'meeting');
+            if ($eventId) {
+                $meeting->update(['google_calendar_event_id' => $eventId]);
             }
         }
 

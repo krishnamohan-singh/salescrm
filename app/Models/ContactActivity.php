@@ -18,13 +18,40 @@ class ContactActivity extends BaseModel
         'old_values',
         'new_values',
         'field_changed',
-        'created_by'
+        'created_by',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
     ];
+
+    protected static function booted()
+    {
+        static::created(function ($activity) {
+            if ($activity->activity_type === 'created') {
+                return;
+            }
+
+            $contact = Contact::find($activity->contact_id);
+            if (!$contact || !$contact->account_id) {
+                return;
+            }
+
+            // Skip initial assignment activity triggered at creation time
+            if ($activity->activity_type === 'assigned' && $contact->created_at) {
+                $createdAtTime = strtotime((string)($activity->created_at ?: now()));
+                $contCreatedAtTime = strtotime((string)$contact->created_at);
+                if (abs($createdAtTime - $contCreatedAtTime) <= 5) {
+                    return;
+                }
+            }
+
+            Account::where('id', $contact->account_id)->update(['last_contacted_date' => now()]);
+        });
+    }
 
     public function contact(): BelongsTo
     {

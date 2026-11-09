@@ -14,7 +14,7 @@ class SyncGoogleMailCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'gmail:sync {--tenant= : Specific tenant/company user ID} {--limit=50 : Max messages to inspect per account}';
+    protected $signature = 'gmail:sync {--tenant= : Specific tenant/company user ID} {--limit=300 : Max messages to inspect per account}';
 
     /**
      * The console command description.
@@ -34,13 +34,15 @@ class SyncGoogleMailCommand extends Command
         if ($tenantOption) {
             $tenants = User::where('id', $tenantOption)->get();
         } else {
-            // Find all tenants with connected Google Mail accounts
-            $tenantIds = Setting::where('key', 'googleMailConnected')
-                ->where('value', '1')
+            // Find all users (admins and team members) with connected Google Mail accounts
+            $connectedUserIds = Setting::whereIn('key', ['googleMailConnected', 'googleMailConnectedEmail'])
+                ->whereNotNull('value')
+                ->where('value', '!=', '')
+                ->where('value', '!=', '0')
                 ->pluck('user_id')
                 ->unique();
 
-            $tenants = User::whereIn('id', $tenantIds)->get();
+            $tenants = User::whereIn('id', $connectedUserIds)->get();
         }
 
         if ($tenants->isEmpty()) {
@@ -48,15 +50,15 @@ class SyncGoogleMailCommand extends Command
             return 0;
         }
 
-        $this->info("Found {$tenants->count()} tenant account(s) to sync.");
+        $this->info("Found {$tenants->count()} connected user account(s) to sync.");
 
         foreach ($tenants as $tenant) {
-            $this->line("Syncing Google Mail for tenant #{$tenant->id} ({$tenant->name})...");
+            $this->line("Syncing Google Mail for user #{$tenant->id} ({$tenant->name} - {$tenant->email})...");
 
             try {
                 $result = $service->syncEmails($tenant->id, $limit);
                 if ($result['success']) {
-                    $this->info("Tenant #{$tenant->id}: Captured {$result['captured']} new emails into CRM timeline.");
+                    $this->info("User #{$tenant->id}: Captured {$result['captured']} new emails into CRM.");
                 } else {
                     $this->warn("Tenant #{$tenant->id}: {$result['message']}");
                 }

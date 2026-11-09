@@ -58,25 +58,23 @@ export default function ProductEdit() {
     const validateStep = (s: number) => {
         const errs: Record<string, string> = {};
         if (s === 1) {
-            if (!data.name) errs.name = t('Name is required');
-            if (!data.sku) errs.sku = t('SKU is required');
-            else if (existingSkus.map((s: string) => s.toLowerCase()).includes(data.sku.toLowerCase())) errs.sku = t('SKU already exists');
+            if (!data.name || !data.name.trim()) errs.name = t('Name is required');
             if (!data.category_id) errs.category_id = t('Category is required');
-            if (!data.tax_id) errs.tax_id = t('Tax is required');
-            if (!data.brand_id) errs.brand_id = t('Brand is required');
+            if (data.sku && data.sku.trim() && existingSkus?.map((s: string) => s.toLowerCase()).includes(data.sku.trim().toLowerCase())) {
+                errs.sku = t('SKU already exists');
+            }
         }
         if (s === 2) {
-            if (!data.price) errs.price = t('Price is required');
-            if (data.price && parseFloat(data.price) < 0) errs.price = t('Price must be at least 0');
-            if (!data.stock_quantity) errs.stock_quantity = t('Stock Quantity is required');
-            if (data.stock_quantity && parseFloat(data.stock_quantity) < 0) errs.stock_quantity = t('Stock Quantity must be at least 0');
-        }
-        if (s === 3) {
-            if (!data.main_image_id) errs.main_image_id = t('Main Image is required');
-            if (!data.additional_image_ids?.length) errs.additional_image_ids = t('Additional Images are required');
-        }
-        if (s === 4) {
-            if (!data.assigned_to) errs.assigned_to = t('Assign To is required');
+            if (data.price !== '' && data.price !== null && data.price !== undefined) {
+                if (isNaN(Number(data.price)) || Number(data.price) < 0) {
+                    errs.price = t('Price must be at least 0');
+                }
+            }
+            if (data.stock_quantity !== '' && data.stock_quantity !== null && data.stock_quantity !== undefined) {
+                if (isNaN(Number(data.stock_quantity)) || Number(data.stock_quantity) < 0) {
+                    errs.stock_quantity = t('Stock Quantity must be at least 0');
+                }
+            }
         }
         return errs;
     };
@@ -205,7 +203,7 @@ export default function ProductEdit() {
                                             {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label required>{t('SKU')}</Label>
+                                            <Label>{t('SKU')}</Label>
                                             <Input
                                                 value={data.sku}
                                                 onChange={e => set('sku', e.target.value)}
@@ -232,12 +230,13 @@ export default function ProductEdit() {
                                             {errors.category_id && <p className="text-xs text-red-500">{errors.category_id}</p>}
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label required>{t('Brand')}</Label>
-                                            <Select value={data.brand_id} onValueChange={v => set('brand_id', v)}>
+                                            <Label>{t('Brand')}</Label>
+                                            <Select value={data.brand_id || 'none'} onValueChange={v => set('brand_id', v === 'none' ? '' : v)}>
                                                 <SelectTrigger className={errors.brand_id ? 'border-red-500' : ''}>
                                                     <SelectValue placeholder={t('Select Brand')} />
                                                 </SelectTrigger>
                                                 <SelectContent searchable>
+                                                    <SelectItem value="none">{t('None')}</SelectItem>
                                                     {brands?.map((b: any) => (
                                                         <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
                                                     ))}
@@ -249,12 +248,13 @@ export default function ProductEdit() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
-                                            <Label required>{t('Tax')}</Label>
-                                            <Select value={data.tax_id} onValueChange={v => set('tax_id', v)}>
+                                            <Label>{t('Tax')}</Label>
+                                            <Select value={data.tax_id || 'none'} onValueChange={v => set('tax_id', v === 'none' ? '' : v)}>
                                                 <SelectTrigger className={errors.tax_id ? 'border-red-500' : ''}>
                                                     <SelectValue placeholder={t('Select Taxes')} />
                                                 </SelectTrigger>
                                                 <SelectContent searchable>
+                                                    <SelectItem value="none">{t('None')}</SelectItem>
                                                     {taxes?.map((tax: any) => (
                                                         <SelectItem key={tax.id} value={tax.id.toString()}>
                                                             {tax.name} ({tax?.type === 'percentage' ? tax.rate + '%' : '$' + tax.rate})
@@ -283,7 +283,7 @@ export default function ProductEdit() {
                                 <div className="space-y-5">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
-                                            <Label required>{t('Price')}</Label>
+                                            <Label>{t('Price')}</Label>
                                             <Input
                                                 type="number"
                                                 step="0.01"
@@ -295,7 +295,7 @@ export default function ProductEdit() {
                                             {errors.price && <p className="text-xs text-red-500">{errors.price}</p>}
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label required>{t('Stock Quantity')}</Label>
+                                            <Label>{t('Stock Quantity')}</Label>
                                             <Input
                                                 type="number"
                                                 value={data.stock_quantity}
@@ -313,7 +313,7 @@ export default function ProductEdit() {
                             {step === 3 && (
                                 <div className="space-y-5">
                                     <div className="space-y-2">
-                                        <Label>{t('Main Image')} <span className="text-red-500">*</span></Label>
+                                        <Label>{t('Main Image')}</Label>
                                         <MediaPicker
                                             value={data.main_image_id ?? undefined}
                                             onChange={(v) => {
@@ -340,7 +340,7 @@ export default function ProductEdit() {
                                         {errors.main_image_id && <p className="text-xs text-red-500">{errors.main_image_id}</p>}
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>{t('Additional Images')} <span className="text-red-500">*</span></Label>
+                                        <Label>{t('Additional Images')}</Label>
                                         <MediaPicker
                                             value={data.additional_image_ids || []}
                                             onChange={v => set('additional_image_ids', v)}
@@ -359,12 +359,13 @@ export default function ProductEdit() {
                                 <div className="space-y-5">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
-                                            <Label required>{t('Assign To')}</Label>
-                                            <Select value={data.assigned_to} onValueChange={v => set('assigned_to', v)}>
+                                            <Label>{t('Assign To')}</Label>
+                                            <Select value={data.assigned_to || 'none'} onValueChange={v => set('assigned_to', v === 'none' ? '' : v)}>
                                                 <SelectTrigger className={errors.assigned_to ? 'border-red-500' : ''}>
                                                     <SelectValue placeholder={t('Select user')} />
                                                 </SelectTrigger>
                                                 <SelectContent searchable>
+                                                    <SelectItem value="none">{t('Unassigned')}</SelectItem>
                                                     {users?.map((u: any) => (
                                                         <SelectItem key={u.id} value={u.id.toString()}>{u.name} ({u.email})</SelectItem>
                                                     ))}
@@ -389,7 +390,7 @@ export default function ProductEdit() {
                             )}
 
                             {/* Step Navigation */}
-                            <div className="flex justify-between mt-8 pt-4 border-t border-border">
+                            <div className="flex justify-between items-center mt-8 pt-4 border-t border-border">
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -397,15 +398,22 @@ export default function ProductEdit() {
                                 >
                                     {step > 1 ? t('Previous') : t('Cancel')}
                                 </Button>
-                                {step < 4 ? (
-                                    <Button type="button" onClick={e => handleNext(e)}>
-                                        {t('Next')}
-                                    </Button>
-                                ) : (
-                                    <Button type="submit" disabled={processing}>
-                                        {processing ? t('Saving...') : t('Save Product')}
-                                    </Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {step < 4 && (
+                                        <Button type="submit" variant="secondary" disabled={processing}>
+                                            {processing ? t('Saving...') : t('Save Product')}
+                                        </Button>
+                                    )}
+                                    {step < 4 ? (
+                                        <Button type="button" onClick={e => handleNext(e)}>
+                                            {t('Next')}
+                                        </Button>
+                                    ) : (
+                                        <Button type="submit" disabled={processing}>
+                                            {processing ? t('Saving...') : t('Save Product')}
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

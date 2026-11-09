@@ -30,10 +30,13 @@ export default function ServicesIndex() {
     }, [pageFilters.view]);
 
     const permissions = auth?.permissions || [];
-    const canCreate = hasPermission(permissions, 'create-services');
-    const canEdit = hasPermission(permissions, 'edit-services');
-    const canDelete = hasPermission(permissions, 'delete-services');
-    const canView = hasPermission(permissions, 'view-services');
+    const userType = String(auth?.user?.type || '').toLowerCase();
+    const isCompany = ['company', 'admin', 'superadmin', 'super admin'].includes(userType) ||
+        auth?.roles?.some((r: string) => ['company', 'admin', 'superadmin'].includes(String(r).toLowerCase()));
+    const canCreate = isCompany || hasPermission(permissions, 'create-services');
+    const canEdit = isCompany || hasPermission(permissions, 'edit-services');
+    const canDelete = isCompany || hasPermission(permissions, 'delete-services');
+    const canView = isCompany || hasPermission(permissions, 'view-services');
 
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedCategory, setSelectedCategory] = useState(pageFilters.category || 'all');

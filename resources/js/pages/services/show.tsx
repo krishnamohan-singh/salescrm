@@ -11,9 +11,11 @@ import { hasPermission } from '@/utils/authorization';
 
 export default function ServiceShow() {
     const { t } = useTranslation();
-    const { service, auth } = usePage().props as any;
     const permissions = auth?.permissions || [];
-    const canEdit = hasPermission(permissions, 'edit-services');
+    const userType = String(auth?.user?.type || '').toLowerCase();
+    const isCompany = ['company', 'admin', 'superadmin', 'super admin'].includes(userType) ||
+        auth?.roles?.some((r: string) => ['company', 'admin', 'superadmin'].includes(String(r).toLowerCase()));
+    const canEdit = isCompany || hasPermission(permissions, 'edit-services');
 
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },

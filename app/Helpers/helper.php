@@ -1126,26 +1126,70 @@ if (! function_exists('copySettingsFromSuperAdmin')) {
 }
 
 if (! function_exists('getCompanyName')) {
-    function getCompanyName()
+    function getCompanyName($companyId = null)
     {
-        $company = User::find(createdBy());
+        $id = $companyId ?: createdBy();
+        $company = User::find($id);
         if ($company) {
             return $company->name;
         } else {
-            return 'Sales';
+            return config('app.name', 'Sales CRM');
         }
     }
 }
 
-if (! function_exists('getCompanyLogo')) {
-    function getCompanyLogo()
+if (! function_exists('getCompanyLogoUrl')) {
+    function getCompanyLogoUrl($companyId = null)
     {
-        $company = getSetting('logoDark', 'logo/logo-dark.png', createdBy());
-        if ($company) {
-            return $company;
-        } else {
-            return 'logo/logo-dark.png';
+        $id = $companyId ?: createdBy();
+        $logo = getSetting('logoDark', null, $id);
+        if (!$logo && $id != 1) {
+            $logo = getSetting('logoDark', null, 1);
         }
+
+        if ($logo) {
+            if (str_starts_with($logo, 'http://') || str_starts_with($logo, 'https://') || str_starts_with($logo, 'data:')) {
+                return $logo;
+            }
+
+            $cleanPath = ltrim($logo, '/');
+
+            // 1. Check storage/media (standard upload folder for logos)
+            if (file_exists(public_path('storage/media/' . $cleanPath))) {
+                return asset('storage/media/' . $cleanPath);
+            }
+
+            // 2. Check storage/
+            if (file_exists(public_path('storage/' . $cleanPath))) {
+                return asset('storage/' . $cleanPath);
+            }
+
+            // 3. Check public/
+            if (file_exists(public_path($cleanPath))) {
+                return asset($cleanPath);
+            }
+
+            // 4. Remote storage
+            $storageType = getSetting('storage_type', 'local', $id);
+            if ($storageType !== 'local') {
+                return rtrim(getImageUrlPrefix(), '/') . '/' . $cleanPath;
+            }
+
+            return asset('storage/media/' . $cleanPath);
+        }
+
+        if (file_exists(public_path('logo.svg'))) {
+            return asset('logo.svg');
+        }
+
+        return null;
+    }
+}
+
+if (! function_exists('getCompanyLogo')) {
+    function getCompanyLogo($companyId = null)
+    {
+        return getCompanyLogoUrl($companyId) ?: 'logo/logo-dark.png';
     }
 }
 

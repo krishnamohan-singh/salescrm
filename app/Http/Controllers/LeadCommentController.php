@@ -41,6 +41,8 @@ class LeadCommentController extends Controller
                 'created_by' => createdBy(),
             ]);
 
+            $lead->update(['last_contacted_date' => now()]);
+
             return redirect()->back()->with('success', __('Comment added successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', __('Failed to add comment: :error', ['error' => $e->getMessage()]));

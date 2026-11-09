@@ -35,6 +35,8 @@ class AccountCommentController extends Controller
             'created_by' => createdBy()
         ]);
 
+        $account->update(['last_contacted_date' => now()]);
+
         return redirect()->back()->with('success', __('Comment added successfully'));
     }
 

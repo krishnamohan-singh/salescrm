@@ -48,13 +48,13 @@ export function PageTemplate({
             <div className="flex flex-1 flex-col gap-4 pt-4 pb-[50px] px-[50px]">
                 {/* <div className="flex h-full flex-1 flex-col gap-4 p-4"> */}
                 {/* Header with action buttons */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl font-semibold">{title}</h1>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-semibold truncate sm:overflow-visible">{title}</h1>
                         {description && <div className="text-xs text-muted-foreground">{description}</div>}
                     </div>
                     {actions && actions.length > 0 && (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0">
                             {actions.map((action, index) => {
                                 // Determine button size based on whether it has a label
                                 const hasLabel = action.label && action.label.trim() !== '';

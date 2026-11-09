@@ -49,6 +49,7 @@ export default function AccountCreate() {
         shipping_postal_code: '',
         shipping_country: '',
         assigned_to: '',
+        last_contacted_date: '',
         status: 'active',
         services: [] as string[],
     });
@@ -232,6 +233,17 @@ export default function AccountCreate() {
                                 placeholder={t('Select services (e.g. SEO, Website Development, Social Media, etc.)')}
                             />
                             <FieldError message={errors.services} />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>{t('Last Contacted Date')}</Label>
+                            <Input
+                                type="datetime-local"
+                                value={data.last_contacted_date}
+                                onChange={(e) => set('last_contacted_date', e.target.value)}
+                                className={errors.last_contacted_date ? 'border-red-500' : ''}
+                            />
+                            <FieldError message={errors.last_contacted_date} />
                         </div>
 
                         <div className="space-y-1.5">

@@ -58,10 +58,18 @@ class OpportunityController extends Controller
             }
         }
 
+        // Handle date period filters
+        if ($request->filled('date_period') && $request->date_period !== 'all') {
+            $dateField = in_array($request->date_field, ['last_contacted_date', 'created_at']) ? $request->date_field : 'created_at';
+            $this->applyDatePeriodFilter($query, $request->date_period, $dateField);
+        } elseif ($request->filled('last_contacted_period') && $request->last_contacted_period !== 'all') {
+            $this->applyDatePeriodFilter($query, $request->last_contacted_period, 'last_contacted_date');
+        }
+
         // Handle sorting
         $sortField = $request->input('sort_field', 'id');
         $sortDirection = $request->input('sort_direction', 'desc');
-        $allowedSorts=['id', 'name', 'amount', 'close_date', 'created_at'];
+        $allowedSorts=['id', 'name', 'amount', 'close_date', 'created_at', 'last_contacted_date'];
         $allowedDirection = ['asc', 'desc'];
         if (!in_array($sortDirection, $allowedDirection)) {
             $sortDirection = 'desc';
@@ -111,7 +119,7 @@ class OpportunityController extends Controller
             'users' => $users,
             'allUsers' => $allUsers,
             'canViewAll' => $canViewAll,
-            'filters' => $request->all(['view', 'search', 'account_id', 'opportunity_stage_id', 'opportunity_source_id', 'status', 'assigned_to', 'sort_field', 'sort_direction', 'per_page', 'page']),
+            'filters' => $request->all(['view', 'search', 'account_id', 'opportunity_stage_id', 'opportunity_source_id', 'status', 'assigned_to', 'date_period', 'date_field', 'last_contacted_period', 'sort_field', 'sort_direction', 'per_page', 'page']),
         ]);
     }
 
@@ -161,6 +169,7 @@ class OpportunityController extends Controller
             'opportunity_source_id' => 'nullable|exists:opportunity_sources,id',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'required|exists:users,id',
+            'last_contacted_date' => 'nullable|date',
             'products' => 'required|array|min:1',
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity' => 'required|integer|min:1',
@@ -271,6 +280,12 @@ class OpportunityController extends Controller
             ->with(['category:id,name', 'tax:id,name,rate'])
             ->orderBy('name')
             ->get();
+
+        try {
+            app(\App\Services\GoogleMailService::class)->syncEntityActivities('opportunity', $opportunity, $tenantId);
+        } catch (\Throwable $e) {
+            \Log::warning('Error syncing opportunity email activities: ' . $e->getMessage());
+        }
 
         return Inertia::render('opportunities/show', [
             'opportunity'    => $opportunity,
@@ -462,11 +477,19 @@ class OpportunityController extends Controller
                     'opportunity_source_id' => 'nullable|exists:opportunity_sources,id',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'required|exists:users,id',
+                    'last_contacted_date' => 'nullable|date',
+                    'stage_change_reason' => 'nullable|string|max:1000',
+                    'reason' => 'nullable|string|max:1000',
                     'products' => 'required|array|min:1',
                     'products.*.product_id' => 'required|exists:products,id',
                     'products.*.quantity' => 'required|integer|min:1',
                     'products.*.unit_price' => 'required|numeric|min:0',
                 ]);
+
+                if ($request->filled('reason')) {
+                    $validated['stage_change_reason'] = $request->input('reason');
+                }
+                unset($validated['reason']);
 
                 $products = $validated['products'] ?? [];
                 unset($validated['products']);
@@ -562,7 +585,7 @@ class OpportunityController extends Controller
         return redirect()->back()->with('success', __('Activity deleted successfully.'));
     }
 
-    public function toggleStatus($opportunityId)
+    public function toggleStatus(Request $request, $opportunityId)
     {
         $opportunity = Opportunity::where('id', $opportunityId)
             ->where('created_by', createdBy())
@@ -571,6 +594,9 @@ class OpportunityController extends Controller
         if ($opportunity) {
             try {
                 $opportunity->status = $opportunity->status === 'active' ? 'inactive' : 'active';
+                if ($request->filled('reason')) {
+                    $opportunity->stage_change_reason = $request->input('reason');
+                }
                 $opportunity->save();
 
                 return redirect()->back()->with('success', __('Opportunity status updated successfully.'));
@@ -586,6 +612,7 @@ class OpportunityController extends Controller
     {
         $validated = $request->validate([
             'opportunity_stage_id' => 'required|exists:opportunity_stages,id',
+            'reason' => 'nullable|string|max:1000',
         ]);
 
         $opportunity = Opportunity::where('id', $opportunityId)
@@ -593,6 +620,9 @@ class OpportunityController extends Controller
             ->firstOrFail();
 
         $opportunity->fill($validated);
+        if ($request->filled('reason')) {
+            $opportunity->stage_change_reason = $request->input('reason');
+        }
 
         if (isEmailTemplateEnabled('Opportunity Status Changed', createdBy()) && $opportunity && $opportunity->assigned_to && $opportunity->isDirty('opportunity_stage_id') && !IsDemo()) {
             $old = $opportunity->getOriginal('opportunity_stage_id');
@@ -602,9 +632,13 @@ class OpportunityController extends Controller
             $newStageName = \App\Models\OpportunityStage::find($new)?->name ?? 'N/A';
             event(new \App\Events\OpportunityStageChanged($opportunity, $oldStageName, $newStageName));
         }
-        $opportunity->update([
+        $updateData = [
             'opportunity_stage_id' => $validated['opportunity_stage_id']
-        ]);
+        ];
+        if ($request->filled('reason')) {
+            $updateData['stage_change_reason'] = $request->input('reason');
+        }
+        $opportunity->update($updateData);
 
         return redirect()->back()->with('success', __('Opportunity status updated successfully.'));
     }
@@ -617,5 +651,72 @@ class OpportunityController extends Controller
 
         $name = 'opportunity_' . date('Y-m-d i:h:s');
         return Excel::download(new OpportunityExport(), $name . '.xlsx');
+    }
+
+    /**
+     * Apply date period filter to a query.
+     */
+    protected function applyDatePeriodFilter($query, $period, $dateField = 'created_at')
+    {
+        if (empty($period) || $period === 'all') {
+            return;
+        }
+
+        if (!in_array($dateField, ['created_at', 'last_contacted_date'])) {
+            $dateField = 'created_at';
+        }
+
+        if ($period === 'never_contacted') {
+            $query->whereNull('last_contacted_date');
+            return;
+        }
+
+        if ($period === 'contacted') {
+            $query->whereNotNull('last_contacted_date');
+            return;
+        }
+
+        $now = \Carbon\Carbon::now();
+        $start = null;
+        $end = null;
+
+        switch ($period) {
+            case 'today':
+                $start = \Carbon\Carbon::today()->startOfDay();
+                $end = \Carbon\Carbon::today()->endOfDay();
+                break;
+            case 'yesterday':
+                $start = \Carbon\Carbon::yesterday()->startOfDay();
+                $end = \Carbon\Carbon::yesterday()->endOfDay();
+                break;
+            case 'this_week':
+                $start = $now->copy()->startOfWeek();
+                $end = $now->copy()->endOfWeek();
+                break;
+            case 'last_week':
+                $start = $now->copy()->subWeek()->startOfWeek();
+                $end = $now->copy()->subWeek()->endOfWeek();
+                break;
+            case 'this_month':
+                $start = $now->copy()->startOfMonth();
+                $end = $now->copy()->endOfMonth();
+                break;
+            case 'last_month':
+                $start = $now->copy()->subMonth()->startOfMonth();
+                $end = $now->copy()->subMonth()->endOfMonth();
+                break;
+            case 'this_year':
+                $start = $now->copy()->startOfYear();
+                $end = $now->copy()->endOfYear();
+                break;
+            case 'last_year':
+                $start = $now->copy()->subYear()->startOfYear();
+                $end = $now->copy()->subYear()->endOfYear();
+                break;
+        }
+
+        if ($start && $end) {
+            $query->whereBetween($dateField, [$start, $end]);
+        }
     }
 }

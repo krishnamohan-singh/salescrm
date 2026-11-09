@@ -92,7 +92,7 @@ class DashboardController extends Controller
             ['route' => 'accounts.index', 'permission' => 'manage-accounts'],
             ['route' => 'plans.index', 'permission' => 'manage-plans'],
             ['route' => 'referral.index', 'permission' => 'manage-referral'],
-            ['route' => 'settings.index', 'permission' => 'manage-settings'],
+            ['route' => 'settings', 'permission' => 'manage-settings'],
         ];
 
         // Find first available route

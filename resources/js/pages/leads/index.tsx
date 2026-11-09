@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { cn } from '@/lib/utils';
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote, Cable, Clock } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, MoreHorizontal, Building2, User, Users, Download, Upload, FileUp, FileDown, Lock, Banknote, Cable, Clock, Mail, TrendingUp } from 'lucide-react';
+import { SendEmailModal } from '@/components/send-email-modal';
+import { ChangeStageReasonModal } from '@/components/ChangeStageReasonModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,6 +39,8 @@ export default function Leads() {
     }, [flash]);
     const permissions = auth?.permissions || [];
     const getInitials = useInitials();
+    const [selectedEmailLead, setSelectedEmailLead] = useState<any>(null);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -46,6 +50,8 @@ export default function Leads() {
     const [selectedConverted, setSelectedConverted] = useState(pageFilters.is_converted || 'all');
     const [selectedAssignee, setSelectedAssignee] = useState(pageFilters.assigned_to || 'all');
     const [selectedCreator, setSelectedCreator] = useState(pageFilters.created_by || 'all');
+    const [selectedDatePeriod, setSelectedDatePeriod] = useState(pageFilters.date_period || 'all');
+    const [selectedDateField, setSelectedDateField] = useState(pageFilters.date_field || 'created_at');
     const [showFilters, setShowFilters] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
@@ -64,6 +70,15 @@ export default function Leads() {
     const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
     const [bulkAssignUserId, setBulkAssignUserId] = useState<string>('');
     const [isBulkAssigning, setIsBulkAssigning] = useState<boolean>(false);
+
+    // Stage and Status Reason Modal state
+    const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+    const [stageModalLead, setStageModalLead] = useState<any>(null);
+    const [stageModalTarget, setStageModalTarget] = useState<any>(null);
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [statusModalLead, setStatusModalLead] = useState<any>(null);
+    const [isUpdatingStage, setIsUpdatingStage] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
     const handleToggleSelectLead = (id: number) => {
         setSelectedLeadIds(prev =>
@@ -112,7 +127,7 @@ export default function Leads() {
     useEffect(() => {
         if (!pageInitialState) applyFilters();
         setPageInitialState(false);
-    }, [selectedStatus, selectedConverted, selectedAssignee, selectedCreator, selectedLeadStatus, selectedLeadSource]);
+    }, [selectedStatus, selectedConverted, selectedAssignee, selectedCreator, selectedLeadStatus, selectedLeadSource, selectedDatePeriod, selectedDateField]);
 
     const isViewingMyData = selectedAssignee === String(auth?.user?.id);
 
@@ -124,14 +139,14 @@ export default function Leads() {
 
     // Check if any filters are active
     const hasActiveFilters = () => {
-        return searchTerm !== '' || selectedLeadStatus !== 'all' || selectedLeadSource !== 'all' || selectedStatus !== 'all' || selectedConverted !== 'all' || selectedAssignee !== 'all' || selectedCreator !== 'all';
+        return searchTerm !== '' || selectedLeadStatus !== 'all' || selectedLeadSource !== 'all' || selectedStatus !== 'all' || selectedConverted !== 'all' || selectedAssignee !== 'all' || selectedCreator !== 'all' || selectedDatePeriod !== 'all';
     };
 
     const hasEmptyDropdowns = leadStatuses.length === 0 || leadSources.length === 0 || accountIndustries.length === 0 || campaigns.length === 0 || users.length === 0;
 
     // Count active filters
     const activeFilterCount = () => {
-        return (searchTerm ? 1 : 0) + (selectedLeadStatus !== 'all' ? 1 : 0) + (selectedLeadSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedConverted !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0) + (selectedCreator !== 'all' ? 1 : 0);
+        return (searchTerm ? 1 : 0) + (selectedLeadStatus !== 'all' ? 1 : 0) + (selectedLeadSource !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedConverted !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0) + (selectedCreator !== 'all' ? 1 : 0) + (selectedDatePeriod !== 'all' ? 1 : 0);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -150,6 +165,8 @@ export default function Leads() {
             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
             created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: pageFilters.sort_field || undefined,
             sort_direction: pageFilters.sort_direction || undefined,
             ...(parseInt(pageFilters.per_page) !== (activeView === 'grid' ? 12 : 10) && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -172,24 +189,43 @@ export default function Leads() {
             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
             created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: field,
             sort_direction: direction,
             ...(parseInt(pageFilters.per_page) !== (activeView === 'grid' ? 12 : 10) && pageFilters.per_page && { per_page: pageFilters.per_page }),
         }, { preserveState: true, preserveScroll: true });
     };
 
+    const saveCurrentListUrl = () => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('leads_list_return_url', window.location.pathname + window.location.search);
+        }
+    };
+
+    useEffect(() => {
+        saveCurrentListUrl();
+    }, [leads?.current_page, activeView, pageFilters]);
+
     const handleAction = (action: string, item: any) => {
         setCurrentItem(item);
 
         switch (action) {
             case 'view':
+                saveCurrentListUrl();
                 router.get(route('leads.show', item.id));
                 break;
             case 'edit':
+                saveCurrentListUrl();
                 router.get(route('leads.edit', item.id));
                 break;
             case 'delete':
                 setIsDeleteModalOpen(true);
+                break;
+            case 'change-stage':
+                setStageModalLead(item);
+                setStageModalTarget(null);
+                setIsStageModalOpen(true);
                 break;
             case 'toggle-status':
                 handleToggleStatus(item);
@@ -209,6 +245,7 @@ export default function Leads() {
 
     const handleRowClick = (lead: any, e?: React.MouseEvent) => {
         if (!canView) return;
+        saveCurrentListUrl();
         if (e && (e.metaKey || e.ctrlKey)) {
             window.open(route('leads.show', lead.id), '_blank');
             return;
@@ -251,24 +288,72 @@ export default function Leads() {
             toast.error(t('Permission denied.'));
             return;
         }
+        setStatusModalLead(lead);
+        setIsStatusModalOpen(true);
+    };
 
-        const newStatus = lead.status === 'active' ? 'inactive' : 'active';
+    const handleStatusModalConfirm = ({ reason }: { reason: string }) => {
+        if (!statusModalLead) return;
+        const newStatus = statusModalLead.status === 'active' ? 'inactive' : 'active';
+        setIsUpdatingStatus(true);
         toast.loading(`${newStatus === 'active' ? t('Activating') : t('Deactivating')} lead...`);
 
-        router.put(route('leads.toggle-status', lead.id), {}, {
+        router.put(route('leads.toggle-status', statusModalLead.id), {
+            reason: reason
+        }, {
+            preserveState: true,
+            preserveScroll: true,
             onSuccess: () => {
                 toast.dismiss();
+                toast.success(t('Lead status updated successfully'));
+                setIsStatusModalOpen(false);
+                setStatusModalLead(null);
+                setIsUpdatingStatus(false);
                 if (activeView === 'kanban') {
                     loadKanbanData();
                 }
             },
             onError: (errors) => {
                 toast.dismiss();
+                setIsUpdatingStatus(false);
                 if (typeof errors === 'string') {
                     toast.error(errors);
                 } else {
                     toast.error(t('Failed to update status: {{errors}}', { errors: Object.values(errors).join(', ') }));
                 }
+            }
+        });
+    };
+
+    const handleStageModalConfirm = ({ newStageId, reason }: { newStageId?: string; reason: string }) => {
+        if (!stageModalLead) return;
+        const targetStatusId = newStageId || stageModalTarget?.id;
+        if (!targetStatusId) return;
+
+        setIsUpdatingStage(true);
+        toast.loading(t('Updating lead stage...'));
+
+        router.put(route('leads.update-status', stageModalLead.id), {
+            lead_status_id: targetStatusId,
+            reason: reason
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.dismiss();
+                toast.success(t('Lead stage updated successfully'));
+                setIsStageModalOpen(false);
+                setStageModalLead(null);
+                setStageModalTarget(null);
+                setIsUpdatingStage(false);
+                if (activeView === 'kanban') {
+                    loadKanbanData();
+                }
+            },
+            onError: (errors) => {
+                toast.dismiss();
+                setIsUpdatingStage(false);
+                toast.error(typeof errors === 'string' ? errors : t('Failed to update lead stage'));
             }
         });
     };
@@ -503,22 +588,52 @@ export default function Leads() {
         {
             key: 'lead_status',
             label: t('Progress'),
-            render: (value: any) => value ? (
-                <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset" style={{ backgroundColor: value.color + '20', color: value.color, borderColor: value.color + '40' }}>
-                    {value.name}
-                </span>
+            render: (value: any, row: any) => value ? (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasPermission(permissions, 'edit-leads')) {
+                            setStageModalLead(row);
+                            setStageModalTarget(null);
+                            setIsStageModalOpen(true);
+                        }
+                    }}
+                    title={hasPermission(permissions, 'edit-leads') ? t('Click to change stage') : undefined}
+                    className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-all",
+                        hasPermission(permissions, 'edit-leads') && "cursor-pointer hover:opacity-80 hover:scale-105"
+                    )}
+                    style={{ backgroundColor: value.color + '20', color: value.color, borderColor: value.color + '40' }}
+                >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: value.color }} />
+                    <span>{value.name}</span>
+                </button>
             ) : t('-')
         },
         {
             key: 'status',
             label: t('Status'),
-            render: (value: string) => (
-                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${value === 'active'
-                    ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
-                    : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-                    }`}>
+            render: (value: string, row: any) => (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasPermission(permissions, 'toggle-status-leads')) {
+                            handleToggleStatus(row);
+                        }
+                    }}
+                    title={hasPermission(permissions, 'toggle-status-leads') ? t('Click to toggle status') : undefined}
+                    className={cn(
+                        `inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${value === 'active'
+                            ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
+                            : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+                        }`,
+                        hasPermission(permissions, 'toggle-status-leads') && "cursor-pointer hover:opacity-80 hover:scale-105 transition-all"
+                    )}
+                >
                     {value === 'active' ? t('Active') : t('Inactive')}
-                </span>
+                </button>
             )
         },
         {
@@ -553,6 +668,27 @@ export default function Leads() {
             }
         },
         {
+            key: 'last_contacted_date',
+            label: t('Last Contacted'),
+            sortable: true,
+            render: (value: any) => {
+                if (!value) {
+                    return (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                            <LucidIcons.PhoneCall className="h-3 w-3 text-gray-400" />
+                            {t('Never')}
+                        </span>
+                    );
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        <LucidIcons.PhoneCall className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                        {window.appSettings?.formatDateTime(value, false) || new Date(value).toLocaleDateString()}
+                    </span>
+                );
+            }
+        },
+        {
             key: 'created_at',
             label: t('Created At'),
             sortable: true,
@@ -562,6 +698,13 @@ export default function Leads() {
 
     // Define table actions
     const actions = [
+        {
+            label: t('Change Stage'),
+            icon: 'TrendingUp',
+            action: 'change-stage',
+            className: 'text-indigo-500',
+            requiredPermission: 'edit-leads'
+        },
         {
             label: t('Convert to Account'),
             icon: 'Building2',
@@ -711,6 +854,36 @@ export default function Leads() {
                                     label: user.name
                                 }))
                             ]
+                        },
+                        {
+                            name: 'date_period',
+                            label: t('Period'),
+                            type: 'select' as const,
+                            value: selectedDatePeriod,
+                            onChange: setSelectedDatePeriod,
+                            options: [
+                                { value: 'all', label: t('All Time') },
+                                { value: 'today', label: t('Today') },
+                                { value: 'yesterday', label: t('Yesterday') },
+                                { value: 'this_week', label: t('This Week') },
+                                { value: 'last_week', label: t('Last Week') },
+                                { value: 'this_month', label: t('This Month') },
+                                { value: 'last_month', label: t('Last Month') },
+                                { value: 'this_year', label: t('This Year') },
+                                { value: 'last_year', label: t('Last Year') },
+                                { value: 'never_contacted', label: t('Never Contacted') },
+                            ]
+                        },
+                        {
+                            name: 'date_field',
+                            label: t('Filter Date By'),
+                            type: 'select' as const,
+                            value: selectedDateField,
+                            onChange: setSelectedDateField,
+                            options: [
+                                { value: 'created_at', label: t('Created Date') },
+                                { value: 'last_contacted_date', label: t('Last Contacted Date') },
+                            ]
                         }
                     ]}
                     // showFilters={showFilters}
@@ -735,6 +908,8 @@ export default function Leads() {
                             is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
                             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
                             created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
+                            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                             sort_field: pageFilters.sort_field || undefined,
                             sort_direction: pageFilters.sort_direction || undefined,
                             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -777,7 +952,7 @@ export default function Leads() {
                         total={leads?.total || leads?.data?.length || 0}
                         links={leads?.links}
                         entityName={t("leads")}
-                        onPageChange={(url) => router.get(url)}
+                        onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                         //  {...(activeView !== 'kanban' && {
                         currentPerPage={pageFilters.per_page?.toString() || "10"}
                         onPerPageChange={(value) => {
@@ -790,6 +965,9 @@ export default function Leads() {
                                 status: selectedStatus !== 'all' ? selectedStatus : undefined,
                                 is_converted: selectedConverted !== 'all' ? selectedConverted : undefined,
                                 assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                                created_by: selectedCreator !== 'all' ? selectedCreator : undefined,
+                                date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                                date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                                 sort_field: pageFilters.sort_field || undefined,
                                 sort_direction: pageFilters.sort_direction || undefined,
                                 ...(parseInt(value) !== 10 && { per_page: parseInt(value) }),
@@ -830,11 +1008,10 @@ export default function Leads() {
                                         if (!hasPermission(permissions, 'edit-leads')) { toast.error(t('Permission denied.')); return; }
                                         const currentLead = Object.values(kanbanData).flatMap((c: any) => c.items).find((l: any) => l.id.toString() === leadId);
                                         if (currentLead) {
-                                            toast.loading(t('Updating...'));
-                                            router.put(route('leads.update', leadId), { ...(currentLead as any), lead_status_id: status.id }, {
-                                                onSuccess: () => { toast.dismiss(); loadKanbanData(); },
-                                                onError: () => { toast.dismiss(); toast.error(t('Failed to update lead status')); }
-                                            });
+                                            if (currentLead.lead_status?.id === status.id || currentLead.lead_status_id === status.id) return;
+                                            setStageModalLead(currentLead);
+                                            setStageModalTarget(status);
+                                            setIsStageModalOpen(true);
                                         }
                                     }}
                                 >
@@ -950,6 +1127,16 @@ export default function Leads() {
                                                                                 <Edit className="h-4 w-4 mr-2" />{t('Edit')}
                                                                             </DropdownMenuItem>
                                                                         )}
+                                                                        {hasPermission(permissions, 'edit-leads') && (
+                                                                            <DropdownMenuItem onClick={() => { setStageModalLead(lead); setStageModalTarget(null); setIsStageModalOpen(true); }}>
+                                                                                <TrendingUp className="h-4 w-4 mr-2 text-indigo-500" />{t('Change Stage')}
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {(lead.email || lead.alternate_email) && (
+                                                                            <DropdownMenuItem onClick={() => { setSelectedEmailLead(lead); setIsEmailModalOpen(true); }}>
+                                                                                <Mail className="h-4 w-4 mr-2 text-primary" />{t('Send Email')}
+                                                                            </DropdownMenuItem>
+                                                                        )}
                                                                         {hasPermission(permissions, 'convert-leads') && !lead.is_converted && (
                                                                             <>
                                                                                 <DropdownMenuSeparator />
@@ -1008,6 +1195,14 @@ export default function Leads() {
                                                             </div>
                                                         )}
 
+                                                        {/* Reason for stage/status change */}
+                                                        {lead.stage_change_reason && (
+                                                            <div className="mb-2 px-2 py-1 rounded bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-200" title={lead.stage_change_reason}>
+                                                                <span className="font-semibold text-amber-800 dark:text-amber-300 mr-1">{t('Reason')}:</span>
+                                                                <span className="line-clamp-2">{lead.stage_change_reason}</span>
+                                                            </div>
+                                                        )}
+
                                                         {/* Footer: date + lead age + assigned avatar */}
                                                         <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
                                                             <div className="flex items-center gap-1.5 flex-wrap text-xs text-gray-500">
@@ -1017,6 +1212,20 @@ export default function Leads() {
                                                                         {window.appSettings?.formatDateTime(lead.created_at, false) || new Date(lead.created_at).toLocaleDateString()}
                                                                     </span>
                                                                 </div>
+                                                                <span
+                                                                    className={cn(
+                                                                        "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                                                                        lead.last_contacted_date
+                                                                            ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800"
+                                                                            : "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700"
+                                                                    )}
+                                                                    title={t('Last Contacted')}
+                                                                >
+                                                                    <LucidIcons.PhoneCall className="h-2.5 w-2.5" />
+                                                                    {lead.last_contacted_date
+                                                                        ? (window.appSettings?.formatDateTime(lead.last_contacted_date, false) || new Date(lead.last_contacted_date).toLocaleDateString())
+                                                                        : t('Never')}
+                                                                </span>
                                                                 {lead.lead_age && (
                                                                     <span
                                                                         className={cn(
@@ -1235,7 +1444,7 @@ export default function Leads() {
                             total={leads?.total || leads?.data?.length || 0}
                             links={leads?.links}
                             entityName={t("leads")}
-                            onPageChange={(url) => router.get(url)}
+                            onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                             perPageOptions={[12, 24, 48, 96]}
                             currentPerPage={pageFilters.per_page?.toString() || '12'}
                             onPerPageChange={(value) => {
@@ -1486,6 +1695,54 @@ export default function Leads() {
                     </div>
                 </div>
             )}
+
+            {selectedEmailLead && (
+                <SendEmailModal
+                    isOpen={isEmailModalOpen}
+                    onClose={() => { setIsEmailModalOpen(false); setSelectedEmailLead(null); }}
+                    recipientEmail={selectedEmailLead.email || selectedEmailLead.alternate_email || ''}
+                    recipientName={selectedEmailLead.name}
+                    entityType="lead"
+                    entityId={selectedEmailLead.id}
+                    entityName={selectedEmailLead.name}
+                />
+            )}
+
+            {/* Stage Change Reason Modal */}
+            <ChangeStageReasonModal
+                isOpen={isStageModalOpen}
+                onClose={() => {
+                    setIsStageModalOpen(false);
+                    setStageModalLead(null);
+                    setStageModalTarget(null);
+                }}
+                onConfirm={handleStageModalConfirm}
+                itemName={stageModalLead?.name || ''}
+                entityType="lead"
+                currentStage={stageModalLead ? {
+                    id: stageModalLead.lead_status?.id || stageModalLead.lead_status_id,
+                    name: stageModalLead.lead_status?.name || leadStatuses.find((s: any) => s.id === stageModalLead.lead_status_id)?.name || 'Current Stage',
+                    color: stageModalLead.lead_status?.color || leadStatuses.find((s: any) => s.id === stageModalLead.lead_status_id)?.color
+                } : null}
+                targetStage={stageModalTarget}
+                stages={leadStatuses}
+                isLoading={isUpdatingStage}
+            />
+
+            {/* Status Toggle Reason Modal */}
+            <ChangeStageReasonModal
+                isOpen={isStatusModalOpen}
+                onClose={() => {
+                    setIsStatusModalOpen(false);
+                    setStatusModalLead(null);
+                }}
+                onConfirm={handleStatusModalConfirm}
+                itemName={statusModalLead?.name || ''}
+                entityType="lead"
+                isStatusToggle={true}
+                currentStatus={statusModalLead?.status || 'active'}
+                isLoading={isUpdatingStatus}
+            />
 
         </PageTemplate>
     );

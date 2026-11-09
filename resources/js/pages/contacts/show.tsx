@@ -13,6 +13,7 @@ import { hasPermission } from '@/utils/authorization';
 import { EntityTasksCard } from '@/components/entity-tasks-card';
 import { LogCallModal } from '@/components/log-call-modal';
 import { EntityJourneyTimeline } from '@/components/entity-journey-timeline';
+import { SendEmailModal } from '@/components/send-email-modal';
 
 export default function ContactShow() {
     const { t } = useTranslation();
@@ -20,14 +21,31 @@ export default function ContactShow() {
     const permissions = auth?.permissions || [];
     const getInitials = useInitials();
     const [isLogCallModalOpen, setIsLogCallModalOpen] = useState(false);
+    const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
 
     const filteredMeetings = useMemo(() => meetings?.filter((m: any) => m.type !== 'call') || [], [meetings]);
     const filteredCalls = useMemo(() => meetings?.filter((m: any) => m.type === 'call') || [], [meetings]);
 
+    const getReturnUrl = () => {
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('contacts_list_return_url');
+            if (saved && (saved.startsWith('/contacts') || saved.includes('/contacts'))) return saved;
+        }
+        return route('contacts.index');
+    };
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/contacts') && !document.referrer.includes('/contacts/')) {
+            window.history.back();
+            return;
+        }
+        router.visit(getReturnUrl());
+    };
+
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Contact Management') },
-        { title: t('Contacts'), href: route('contacts.index') },
+        { title: t('Contacts'), href: getReturnUrl() },
         { title: t('View Contact') }
     ];
 
@@ -54,6 +72,12 @@ export default function ContactShow() {
             description={t('Contact details and related information')}
             breadcrumbs={breadcrumbs}
             actions={[
+                ...(contact.email ? [{
+                    label: t('Send Email'),
+                    icon: <Mail className="h-4 w-4 mr-2" />,
+                    variant: 'default' as const,
+                    onClick: () => setIsSendEmailModalOpen(true)
+                }] : []),
                 ...(hasPermission(permissions, 'create-calls') ? [{
                     label: t('Log Call'),
                     icon: <PhoneCall className="h-4 w-4 mr-2" />,
@@ -64,7 +88,7 @@ export default function ContactShow() {
                     label: t('Back'),
                     icon: <ArrowLeft className="h-4 w-4 mr-2" />,
                     variant: 'outline' as const,
-                    onClick: () => router.visit(route('contacts.index'))
+                    onClick: handleBack
                 }
             ]}
             noPadding
@@ -181,7 +205,22 @@ export default function ContactShow() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                         <div className="space-y-0.5 min-w-0">
                                             <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
-                                            <p className="text-sm font-medium text-foreground break-all">{contact.email || '—'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium text-foreground break-all">{contact.email || '—'}</p>
+                                                {contact.email && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setIsSendEmailModalOpen(true)}
+                                                        className="h-6 px-1.5 text-xs text-primary gap-1 hover:bg-primary/10"
+                                                        title={t('Send Email')}
+                                                    >
+                                                        <Mail className="h-3 w-3" />
+                                                        <span>{t('Send')}</span>
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="space-y-0.5">
                                             <p className="text-xs font-medium text-muted-foreground">{t('Phone')}</p>
@@ -535,6 +574,17 @@ export default function ContactShow() {
                 parentEmail={contact.email}
                 users={users}
                 defaultAssigneeId={contact.assigned_to}
+            />
+
+            {/* Send Email Modal */}
+            <SendEmailModal
+                isOpen={isSendEmailModalOpen}
+                onClose={() => setIsSendEmailModalOpen(false)}
+                recipientEmail={contact.email || ''}
+                recipientName={contact.name}
+                entityType="contact"
+                entityId={contact.id}
+                entityName={contact.name}
             />
         </PageTemplate>
     );

@@ -18,9 +18,10 @@ class GoogleCalendarController extends Controller
     public function getEvents(Request $request)
     {
         try {
+            $userId = auth()->id() ?: createdBy();
             $events = $this->calendarService->getEvents(
-                auth()->id(),
-                $request->get('maxResults', 50)
+                $userId,
+                $request->get('maxResults', 100)
             );
 
             return response()->json([
@@ -39,11 +40,12 @@ class GoogleCalendarController extends Controller
     public function syncEvents(Request $request)
     {
         try {
-            $isEnabled = $this->calendarService->isEnabled(createdBy());
-            $isAuthorized = $this->calendarService->isAuthorized(createdBy());
+            $userId = auth()->id() ?: createdBy();
+            $isEnabled = $this->calendarService->isEnabled($userId);
+            $isAuthorized = $this->calendarService->isAuthorized($userId);
 
             \Log::info('Google Calendar sync check', [
-                'user_id' => createdBy(),
+                'user_id' => $userId,
                 'isEnabled' => $isEnabled,
                 'isAuthorized' => $isAuthorized
             ]);
@@ -51,28 +53,22 @@ class GoogleCalendarController extends Controller
             if (!$isEnabled || !$isAuthorized) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Google Calendar not configured. Please configure Google Calendar JSON credentials in settings.',
+                    'message' => __('Google Calendar is not configured. Please configure Google Calendar settings or connect your Google account.'),
                     'needsConfig' => true
                 ]);
             }
 
-            $events = $this->calendarService->getEvents(auth()->id(), 100);
-
-            $events = collect($events)->filter(function ($event) {
-                $cleanedId = str_replace('google_', '', $event['id']);
-                return \App\Models\Meeting::where('google_calendar_event_id', $cleanedId)->exists() ||
-                       \App\Models\Call::where('google_calendar_event_id', $cleanedId)->exists();
-            })->values()->all();
+            $events = $this->calendarService->getEvents($userId, 100);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Calendar events synchronized successfully',
+                'message' => __('Calendar events synchronized successfully'),
                 'events' => $events
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to sync calendar events: ' . $e->getMessage()
+                'message' => __('Failed to sync calendar events: ') . $e->getMessage()
             ]);
         }
     }
@@ -80,8 +76,9 @@ class GoogleCalendarController extends Controller
     public function checkStatus()
     {
         try {
-            $isEnabled = $this->calendarService->isEnabled(createdBy());
-            $isAuthorized = $this->calendarService->isAuthorized(createdBy());
+            $userId = auth()->id() ?: createdBy();
+            $isEnabled = $this->calendarService->isEnabled($userId);
+            $isAuthorized = $this->calendarService->isAuthorized($userId);
 
             return response()->json([
                 'success' => true,

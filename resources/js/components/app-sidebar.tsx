@@ -285,6 +285,15 @@ export function AppSidebar() {
             items.push({ title: t('Contacts'), href: route('contacts.index'), icon: Users, group: t('CRM') });
         }
 
+        if (isCompany || hasPermission(permissions, 'manage-emails') || hasPermission(permissions, 'view-emails') || hasPermission(permissions, 'view-all-emails')) {
+            items.push({
+                title: t('Emails & Mailbox'),
+                href: route('emails.index'),
+                icon: Mail,
+                group: t('CRM'),
+            });
+        }
+
         const campaignChildren = [];
         if (hasPermission(permissions, 'manage-campaigns')) {
             campaignChildren.push({ title: t('Campaigns'), href: route('campaigns.index') });

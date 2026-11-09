@@ -34,10 +34,12 @@ class Account extends BaseModel
         'created_by',
         'assigned_to',
         'services',
+        'last_contacted_date',
     ];
 
     protected $casts = [
         'services' => 'array',
+        'last_contacted_date' => 'datetime',
     ];
 
     public static function defaultServices(): array

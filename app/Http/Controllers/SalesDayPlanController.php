@@ -111,11 +111,23 @@ class SalesDayPlanController extends Controller
             ->orderBy('name')
             ->get();
 
+        $companySettings = settings($tenantId);
+        $reportSettings = [
+            'enabled' => ($companySettings['daily_report_enabled'] ?? 'on') === 'on',
+            'send_time' => $companySettings['daily_report_send_time'] ?? '19:00',
+            'days' => $companySettings['daily_report_days'] ?? 'weekdays',
+            'custom_cc' => $companySettings['daily_report_custom_cc'] ?? '',
+            'include_idle' => ($companySettings['daily_report_include_idle'] ?? 'off') === 'on',
+            'last_sent_date' => $companySettings['daily_report_last_sent_date'] ?? null,
+            'timezone' => $companySettings['defaultTimezone'] ?? $companySettings['timezone'] ?? config('app.timezone', 'UTC'),
+        ];
+
         return Inertia::render('sales-day-plans/index', [
             'dayPlans' => $dayPlans,
             'stats' => $stats,
             'teamUsers' => $teamUsers,
             'canViewAll' => $canViewAll,
+            'reportSettings' => $reportSettings,
             'filters' => $request->all([
                 'search', 'period', 'date', 'start_date', 'end_date', 'user_id', 'assigned_to', 'status', 'sort_field', 'sort_direction', 'per_page', 'page'
             ]),
@@ -621,11 +633,30 @@ class SalesDayPlanController extends Controller
         $managerCcEmails = $this->resolveManagerEmails($dayPlan, $targetEmail, $customCc);
 
         try {
+            $telemetry = [];
+            if ($dayPlan->user) {
+                try {
+                    $telemetry = app(\App\Services\SalesDailyReportService::class)->getDailyTelemetry(
+                        $dayPlan->user,
+                        $dayPlan->plan_date ? $dayPlan->plan_date->format('Y-m-d') : date('Y-m-d'),
+                        $dayPlan->created_by ?: createdBy()
+                    );
+                } catch (\Throwable $e) {
+                    \Log::warning("Could not compute telemetry for manual report send: " . $e->getMessage());
+                }
+            }
+
+            $tenantId = $dayPlan->created_by ?: createdBy();
+            $company = User::find($tenantId);
+            if ($company) {
+                \App\Services\MailConfigService::setDynamicConfigForCompany($company);
+            }
+
             $mail = Mail::to($targetEmail);
             if (!empty($managerCcEmails)) {
                 $mail->cc($managerCcEmails);
             }
-            $mail->send(new SalesDailyReportMail($dayPlan, null, $managerCcEmails));
+            $mail->send(new SalesDailyReportMail($dayPlan, null, $managerCcEmails, $telemetry));
 
             $sentSummary = $targetEmail;
             if (!empty($managerCcEmails)) {
@@ -644,5 +675,87 @@ class SalesDayPlanController extends Controller
             return false;
         }
     }
+
+    public function sendAllReports(Request $request, \App\Services\SalesDailyReportService $reportService)
+    {
+        $companyId = createdBy();
+        $company = User::find($companyId);
+        $targetDate = $request->input('date') ?: date('Y-m-d');
+        $force = (bool) $request->input('force', false);
+
+        if (!$company) {
+            return back()->with('error', __('Company not found.'));
+        }
+
+        $users = User::where('created_by', $company->id)
+            ->where('status', 'active')
+            ->whereNotIn('type', ['client', 'customer'])
+            ->get();
+
+        if ($users->isEmpty()) {
+            return back()->with('error', __('No active sales team members found for this company to send reports to.'));
+        }
+
+        $sentCount = 0;
+        $failedCount = 0;
+        $firstError = null;
+
+        foreach ($users as $salesUser) {
+            $existingPlan = SalesDayPlan::where('created_by', $company->id)
+                ->where('user_id', $salesUser->id)
+                ->whereDate('plan_date', $targetDate)
+                ->first();
+
+            $result = $reportService->sendDailyReport($salesUser, $targetDate, $company, $existingPlan, $force);
+            if ($result['success']) {
+                $sentCount++;
+            } else {
+                $failedCount++;
+                if (!$firstError && !empty($result['message'])) {
+                    $firstError = $result['message'];
+                }
+            }
+        }
+
+        if ($sentCount === 0) {
+            return back()->with('error', __('Failed to send reports: :error', ['error' => $firstError ?: __('Please check your SMTP email settings.')]));
+        }
+
+        $message = __("Daily work reports sent for :count team member(s) with managers in CC.", ['count' => $sentCount]);
+        if ($failedCount > 0) {
+            $message .= " (" . __(":failed failed: :error", ['failed' => $failedCount, 'error' => $firstError]) . ")";
+            return back()->with('warning', $message);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function updateReportSettings(Request $request)
+    {
+        $companyId = createdBy();
+
+        $request->validate([
+            'enabled' => 'nullable',
+            'send_time' => 'nullable|string',
+            'days' => 'nullable|string|in:weekdays,everyday',
+            'custom_cc' => 'nullable|string',
+            'include_idle' => 'nullable',
+        ]);
+
+        $enabled = $request->has('enabled') ? ($request->boolean('enabled') ? 'on' : 'off') : 'on';
+        $includeIdle = $request->has('include_idle') ? ($request->boolean('include_idle') ? 'on' : 'off') : 'off';
+        $sendTime = $request->input('send_time', '19:00');
+        $days = $request->input('days', 'weekdays');
+        $customCc = trim((string)$request->input('custom_cc', ''));
+
+        updateSetting('daily_report_enabled', $enabled, $companyId);
+        updateSetting('daily_report_send_time', $sendTime, $companyId);
+        updateSetting('daily_report_days', $days, $companyId);
+        updateSetting('daily_report_custom_cc', $customCc, $companyId);
+        updateSetting('daily_report_include_idle', $includeIdle, $companyId);
+
+        return back()->with('success', __('Daily sales report settings updated successfully.'));
+    }
 }
+
 

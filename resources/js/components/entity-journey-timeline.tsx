@@ -29,7 +29,9 @@ import {
   ChevronUp,
   Mail,
   Reply,
-  Inbox
+  Inbox,
+  Paperclip,
+  Download,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -39,7 +41,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { useInitials } from '@/hooks/use-initials';
-import { formatRelativeTime } from '@/utils/helper';
+import { formatRelativeTime, formatSmartDateTime } from '@/utils/helper';
 import { hasPermission } from '@/utils/authorization';
 import { toast } from '@/components/custom-toast';
 import { SendEmailModal } from '@/components/send-email-modal';
@@ -695,13 +697,20 @@ export function EntityJourneyTimeline({
                           <TooltipProvider delayDuration={200}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="text-[11px] text-muted-foreground flex items-center gap-1 cursor-default">
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1 cursor-default font-medium">
                                   <Clock className="h-2.5 w-2.5 opacity-70" />
-                                  {formatRelativeTime(activity.created_at)}
+                                  {activity._category === 'emails'
+                                    ? formatSmartDateTime(activity.new_values?.sent_at || activity.created_at)
+                                    : formatRelativeTime(activity.created_at)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent side="top">
-                                <p className="font-mono text-xs">{formatExactDate(activity.created_at)}</p>
+                                <p className="font-mono text-xs">
+                                  {formatExactDate(activity._category === 'emails' ? (activity.new_values?.sent_at || activity.created_at) : activity.created_at)}
+                                  {activity._category === 'emails' && (
+                                    <span className="opacity-80"> ({formatRelativeTime(activity.new_values?.sent_at || activity.created_at)})</span>
+                                  )}
+                                </p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -784,6 +793,20 @@ export function EntityJourneyTimeline({
                                   <p className="font-semibold text-foreground text-xs">{activity.new_values.subject}</p>
                                 </div>
                               )}
+
+                              {/* Date & Time Row */}
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 text-[11px] text-muted-foreground">
+                                <span className="font-semibold text-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-muted-foreground" />
+                                  {t('Date & Time')}:
+                                </span>
+                                <span className="font-mono text-foreground font-medium">
+                                  {formatExactDate(activity.new_values?.sent_at || activity.created_at)}
+                                  <span className="text-[10px] text-muted-foreground ml-1.5 font-normal">
+                                    ({formatRelativeTime(activity.new_values?.sent_at || activity.created_at)})
+                                  </span>
+                                </span>
+                              </div>
                             </div>
 
                             {/* Email Snippet / Body */}
@@ -803,6 +826,40 @@ export function EntityJourneyTimeline({
                                 </p>
                               )}
                             </div>
+
+                            {/* Attachments pills in timeline card */}
+                            {activity.new_values?.has_attachments && activity.new_values?.attachment_names && activity.new_values.attachment_names.length > 0 && (
+                              <div className="pt-1 flex flex-wrap gap-1.5 items-center">
+                                {activity.new_values.attachment_names.map((att: any, attIdx: number) => {
+                                  const name = typeof att === 'string' ? att : att?.name || `File ${attIdx + 1}`;
+                                  const url = typeof att === 'object' && att?.url ? att.url : null;
+                                  return url ? (
+                                    <a
+                                      key={attIdx}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      download
+                                      className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-muted/60 hover:bg-muted text-primary border border-border/60 transition-colors"
+                                      title={name}
+                                    >
+                                      <Paperclip className="h-2.5 w-2.5" />
+                                      <span className="truncate max-w-[120px] font-medium">{name}</span>
+                                      <Download className="h-2.5 w-2.5 opacity-70" />
+                                    </a>
+                                  ) : (
+                                    <span
+                                      key={attIdx}
+                                      className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-muted/40 text-muted-foreground border border-border/40"
+                                      title={name}
+                                    >
+                                      <Paperclip className="h-2.5 w-2.5" />
+                                      <span className="truncate max-w-[120px]">{name}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
 
                             {/* Action toggles (Expand / Collapse / Reply) */}
                             <div className="flex items-center justify-between pt-1 text-[11px]">

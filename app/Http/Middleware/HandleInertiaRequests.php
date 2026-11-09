@@ -231,7 +231,9 @@ class HandleInertiaRequests extends Middleware
             'auth'  => [
                 'user'        => $request->user()?->load('plan', 'creator.plan'),
                 'roles'       => fn() => $request->user()?->roles->pluck('name'),
-                'permissions' => fn() => $request->user()?->getAllPermissions()->pluck('name'),
+                'permissions' => fn() => ($request->user() && in_array(strtolower($request->user()->type ?? ''), ['superadmin', 'super admin', 'company', 'admin']))
+                    ? \Spatie\Permission\Models\Permission::pluck('name')
+                    : $request->user()?->getAllPermissions()->pluck('name'),
                 'attendance'  => fn() => $request->user() ? self::getTodayAttendanceSummary($request->user()) : null,
             ],
             'userLanguage' => config('app.is_demo')
@@ -248,6 +250,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'globalSettings' => $globalSettings,
             'storageSettings' => $storageSettings,
+            'googleMail' => fn() => $request->user() ? app(\App\Services\GoogleMailService::class)->getStatusSummary($request->user()->id) : null,
             'is_demo' => config('app.is_demo',false)
         ];
     }

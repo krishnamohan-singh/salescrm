@@ -21,14 +21,17 @@ class Opportunity extends BaseModel
         'account_id',
         'contact_id',
         'opportunity_stage_id',
+        'stage_change_reason',
         'opportunity_source_id',
         'created_by',
         'assigned_to',
+        'last_contacted_date',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'close_date' => 'date',
+        'last_contacted_date' => 'datetime',
     ];
 
     public function creator(): BelongsTo

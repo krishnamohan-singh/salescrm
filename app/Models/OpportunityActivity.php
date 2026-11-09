@@ -18,13 +18,47 @@ class OpportunityActivity extends BaseModel
         'old_values',
         'new_values',
         'field_changed',
-        'created_by'
+        'created_by',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
     ];
+
+    protected static function booted()
+    {
+        static::created(function ($activity) {
+            if ($activity->activity_type === 'created') {
+                return;
+            }
+
+            $opportunity = Opportunity::find($activity->opportunity_id);
+            if (!$opportunity) {
+                return;
+            }
+
+            // Skip initial assignment activity triggered at creation time
+            if ($activity->activity_type === 'assigned' && $opportunity->created_at) {
+                $createdAtTime = strtotime((string)($activity->created_at ?: now()));
+                $oppCreatedAtTime = strtotime((string)$opportunity->created_at);
+                if (abs($createdAtTime - $oppCreatedAtTime) <= 5) {
+                    return;
+                }
+            }
+
+            // If call or meeting controller already set a custom last_contacted_date in the current request
+            if (in_array(strtolower((string)$activity->activity_type), ['meeting created', 'meeting updated', 'call_held', 'call_scheduled', 'call_logged', 'meeting_held'])) {
+                if ($opportunity->last_contacted_date) {
+                    return;
+                }
+            }
+
+            Opportunity::where('id', $activity->opportunity_id)->update(['last_contacted_date' => now()]);
+        });
+    }
 
     public function opportunity(): BelongsTo
     {

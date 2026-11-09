@@ -58,10 +58,18 @@ class AccountController extends Controller
             }
         }
 
+        // Handle date period filters
+        if ($request->filled('date_period') && $request->date_period !== 'all') {
+            $dateField = in_array($request->date_field, ['last_contacted_date', 'created_at']) ? $request->date_field : 'created_at';
+            $this->applyDatePeriodFilter($query, $request->date_period, $dateField);
+        } elseif ($request->filled('last_contacted_period') && $request->last_contacted_period !== 'all') {
+            $this->applyDatePeriodFilter($query, $request->last_contacted_period, 'last_contacted_date');
+        }
+
         // Handle sorting
         $sortField = $request->input('sort_field', 'id');
         $sortDirection = $request->input('sort_direction', 'desc');
-        $allowedSorts = ['id', 'name', 'email', 'created_at'];
+        $allowedSorts = ['id', 'name', 'email', 'created_at', 'last_contacted_date'];
         $allowedDirection = ['asc', 'desc'];
         if (!in_array($sortDirection, $allowedDirection)) {
             $sortDirection = 'desc';
@@ -109,7 +117,7 @@ class AccountController extends Controller
             'allAccountIndustries' => $allAccountIndustries,
             'canViewAll' => $canViewAll,
             'planLimits' => $planLimits,
-            'filters' => $request->all(['search', 'account_type_id', 'account_industry_id', 'status', 'assigned_to', 'sort_field', 'sort_direction', 'per_page', 'view', 'page']),
+            'filters' => $request->all(['search', 'account_type_id', 'account_industry_id', 'status', 'assigned_to', 'date_period', 'date_field', 'last_contacted_period', 'sort_field', 'sort_direction', 'per_page', 'view', 'page']),
         ]);
     }
 
@@ -169,6 +177,7 @@ class AccountController extends Controller
             'shipping_country' => 'nullable|string|max:255',
             'status' => 'nullable|in:active,inactive',
             'assigned_to' => 'required|exists:users,id',
+            'last_contacted_date' => 'nullable|date',
             'services' => 'nullable|array',
             'services.*' => 'string|max:255',
         ]);
@@ -258,6 +267,12 @@ class AccountController extends Controller
                 ->with(['category:id,name', 'tax:id,name,rate'])
                 ->orderBy('name')
                 ->get();
+ 
+            try {
+                app(\App\Services\GoogleMailService::class)->syncEntityActivities('account', $account, $tenantId);
+            } catch (\Throwable $e) {
+                \Log::warning('Error syncing account email activities: ' . $e->getMessage());
+            }
 
             return Inertia::render('accounts/show', [
                 'account'        => $account,
@@ -452,6 +467,7 @@ class AccountController extends Controller
                     'shipping_country' => 'nullable|string|max:255',
                     'status' => 'nullable|in:active,inactive',
                     'assigned_to' => 'required|exists:users,id',
+                    'last_contacted_date' => 'nullable|date',
                     'services' => 'nullable|array',
                     'services.*' => 'string|max:255',
                 ]);
@@ -537,5 +553,72 @@ class AccountController extends Controller
 
         $name = 'account_' . date('Y-m-d i:h:s');
         return Excel::download(new AccountExport(), $name . '.xlsx');
+    }
+
+    /**
+     * Apply date period filter to a query.
+     */
+    protected function applyDatePeriodFilter($query, $period, $dateField = 'created_at')
+    {
+        if (empty($period) || $period === 'all') {
+            return;
+        }
+
+        if (!in_array($dateField, ['created_at', 'last_contacted_date'])) {
+            $dateField = 'created_at';
+        }
+
+        if ($period === 'never_contacted') {
+            $query->whereNull('last_contacted_date');
+            return;
+        }
+
+        if ($period === 'contacted') {
+            $query->whereNotNull('last_contacted_date');
+            return;
+        }
+
+        $now = \Carbon\Carbon::now();
+        $start = null;
+        $end = null;
+
+        switch ($period) {
+            case 'today':
+                $start = \Carbon\Carbon::today()->startOfDay();
+                $end = \Carbon\Carbon::today()->endOfDay();
+                break;
+            case 'yesterday':
+                $start = \Carbon\Carbon::yesterday()->startOfDay();
+                $end = \Carbon\Carbon::yesterday()->endOfDay();
+                break;
+            case 'this_week':
+                $start = $now->copy()->startOfWeek();
+                $end = $now->copy()->endOfWeek();
+                break;
+            case 'last_week':
+                $start = $now->copy()->subWeek()->startOfWeek();
+                $end = $now->copy()->subWeek()->endOfWeek();
+                break;
+            case 'this_month':
+                $start = $now->copy()->startOfMonth();
+                $end = $now->copy()->endOfMonth();
+                break;
+            case 'last_month':
+                $start = $now->copy()->subMonth()->startOfMonth();
+                $end = $now->copy()->subMonth()->endOfMonth();
+                break;
+            case 'this_year':
+                $start = $now->copy()->startOfYear();
+                $end = $now->copy()->endOfYear();
+                break;
+            case 'last_year':
+                $start = $now->copy()->subYear()->startOfYear();
+                $end = $now->copy()->subYear()->endOfYear();
+                break;
+        }
+
+        if ($start && $end) {
+            $query->whereBetween($dateField, [$start, $end]);
+        }
     }
 }

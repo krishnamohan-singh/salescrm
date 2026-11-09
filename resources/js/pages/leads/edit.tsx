@@ -45,16 +45,33 @@ export default function LeadEdit() {
         campaign_id: String(lead.campaign_id || ''),
         notes: lead.notes || '',
         assigned_to: String(lead.assigned_to || ''),
+        last_contacted_date: lead.last_contacted_date ? new Date(lead.last_contacted_date).toISOString().slice(0, 16) : '',
         status: lead.status || 'active',
         services: Array.isArray(lead.services)
             ? lead.services.map((s: any) => (typeof s === 'string' ? s : (s?.name || String(s?.id || ''))))
             : (typeof lead.services === 'string' ? JSON.parse(lead.services || '[]') : []),
     });
 
+    const getReturnUrl = () => {
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('leads_list_return_url');
+            if (saved && (saved.startsWith('/leads') || saved.includes('/leads'))) return saved;
+        }
+        return route('leads.index');
+    };
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/leads') && !document.referrer.includes('/leads/')) {
+            window.history.back();
+            return;
+        }
+        router.visit(getReturnUrl());
+    };
+
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Lead Management') },
-        { title: t('Leads'), href: route('leads.index') },
+        { title: t('Leads'), href: getReturnUrl() },
         { title: t('Edit') },
     ];
 
@@ -107,7 +124,7 @@ export default function LeadEdit() {
                     label: t('Back'),
                     icon: <ArrowLeft className="h-4 w-4 mr-2" />,
                     variant: 'outline',
-                    onClick: () => router.visit(route('leads.index')),
+                    onClick: handleBack,
                 },
             ]}
             noPadding
@@ -419,6 +436,20 @@ export default function LeadEdit() {
                                     )}
                                 </div>
 
+                                <div className="space-y-2">
+                                    <Label htmlFor="last_contacted_date" className="text-sm font-medium">
+                                        {t('Last Contacted Date')}
+                                    </Label>
+                                    <Input
+                                        id="last_contacted_date"
+                                        type="datetime-local"
+                                        value={data.last_contacted_date}
+                                        onChange={(e) => handleInputChange('last_contacted_date', e.target.value)}
+                                        className={errors.last_contacted_date ? 'border-red-500' : ''}
+                                    />
+                                    {errors.last_contacted_date && <p className="text-xs text-red-500">{errors.last_contacted_date}</p>}
+                                </div>
+
                                 <div className="space-y-2 md:col-span-2">
                                     <Label className="text-sm font-medium">{t('Status')}</Label>
                                     <Select value={data.status} onValueChange={(value) => handleInputChange('status', value)}>
@@ -468,7 +499,7 @@ export default function LeadEdit() {
 
                 {/* Form Actions */}
                 <div className="flex justify-end items-center gap-3 pt-2">
-                    <Button type="button" variant="outline" onClick={() => router.visit(route('leads.index'))}>
+                    <Button type="button" variant="outline" onClick={handleBack}>
                         {t('Cancel')}
                     </Button>
                     <Button type="submit" disabled={processing} className="min-w-[120px]">

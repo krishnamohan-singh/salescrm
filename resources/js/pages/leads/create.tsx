@@ -45,6 +45,7 @@ export default function LeadCreate() {
         campaign_id: '',
         notes: '',
         assigned_to: '',
+        last_contacted_date: '',
         status: 'active',
         services: [] as string[],
     });
@@ -415,6 +416,20 @@ export default function LeadCreate() {
                                             {t('Click here to add')} <a href={route('users.index')} className="underline font-medium">{t('Users')}</a>
                                         </p>
                                     )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="last_contacted_date" className="text-sm font-medium">
+                                        {t('Last Contacted Date')}
+                                    </Label>
+                                    <Input
+                                        id="last_contacted_date"
+                                        type="datetime-local"
+                                        value={data.last_contacted_date}
+                                        onChange={(e) => handleInputChange('last_contacted_date', e.target.value)}
+                                        className={errors.last_contacted_date ? 'border-red-500' : ''}
+                                    />
+                                    {errors.last_contacted_date && <p className="text-xs text-red-500">{errors.last_contacted_date}</p>}
                                 </div>
 
                                 <div className="space-y-2 md:col-span-2">

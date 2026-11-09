@@ -33,6 +33,7 @@ export default function OpportunityCreate() {
         opportunity_source_id: '',
         notes: '',
         assigned_to: '',
+        last_contacted_date: '',
         status: 'active',
         products: [{ product_id: '', quantity: '1', unit_price: '0', discount_type: 'none', discount_value: '0' }] as { product_id: string; quantity: string; unit_price: string }[],
     });
@@ -211,6 +212,20 @@ export default function OpportunityCreate() {
                                     />
                                     </div>
                                     {errors.close_date && <p className="text-xs text-red-500">{errors.close_date}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="last_contacted_date" className="text-sm font-medium">
+                                        {t('Last Contacted Date')}
+                                    </Label>
+                                    <Input
+                                        id="last_contacted_date"
+                                        type="datetime-local"
+                                        value={data.last_contacted_date}
+                                        onChange={(e) => handleInputChange('last_contacted_date', e.target.value)}
+                                        className={errors.last_contacted_date ? 'border-red-500' : ''}
+                                    />
+                                    {errors.last_contacted_date && <p className="text-xs text-red-500">{errors.last_contacted_date}</p>}
                                 </div>
 
                                 <div className="space-y-2">

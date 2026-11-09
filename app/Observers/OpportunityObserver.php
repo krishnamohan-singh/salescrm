@@ -57,7 +57,7 @@ class OpportunityObserver
         $userName = auth()->user()?->name ?? 'System';
         
         foreach ($changes as $field => $newValue) {
-            if (in_array($field, ['updated_at'])) continue;
+            if (in_array($field, ['updated_at', 'stage_change_reason', 'last_contacted_date'])) continue;
             
             $oldValue = $original[$field] ?? null;
             
@@ -80,6 +80,11 @@ class OpportunityObserver
                         $newValues['opportunity_stage_color'] = $newOpportunityStage->color;
                     }
                 }
+            }
+
+            if (in_array($field, ['opportunity_stage_id', 'status']) && !empty($opportunity->stage_change_reason)) {
+                $description .= '<div class="mt-1.5 text-xs text-gray-600 dark:text-gray-300"><span class="font-semibold text-gray-700 dark:text-gray-200">Reason:</span> ' . e($opportunity->stage_change_reason) . '</div>';
+                $newValues['reason'] = $opportunity->stage_change_reason;
             }
             
             OpportunityActivity::create([

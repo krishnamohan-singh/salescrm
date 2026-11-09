@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { useEffect, useRef, useState } from 'react';
-import { Settings as SettingsIcon, Building, DollarSign, Users, RefreshCw, Palette, BookOpen, Award, FileText, Mail, Bell, Link2, CreditCard, Calendar, HardDrive, Shield, Bot, Cookie, Search, Webhook, Wallet, MessageSquare, ShoppingBag, Slack, Cable } from 'lucide-react';
+import { Settings as SettingsIcon, Building, DollarSign, Users, RefreshCw, Palette, BookOpen, Award, FileText, Mail, Bell, Link2, CreditCard, Calendar, HardDrive, Shield, Bot, Cookie, Search, Webhook, Wallet, MessageSquare, ShoppingBag, Slack, Cable, Send } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import SystemSettings from './components/system-settings';
 import CompanySystemSettings from './components/company-system-settings';
+import DailySalesReportSettings from './components/daily-sales-report-settings';
 import { usePage, router } from '@inertiajs/react';
 
 import CurrencySettings from './components/currency-settings';
@@ -73,6 +74,12 @@ export default function Settings() {
             href: '#email-notification-settings',
             icon: <Bell className="h-4 w-4 mr-2" />,
             permission: 'manage-email-notifications'
+        },
+        {
+            title: t('Daily Sales Report Settings'),
+            href: '#daily-sales-report-settings',
+            icon: <Send className="h-4 w-4 mr-2" />,
+            permission: 'settings'
         },
         {
             title: t('Twilio Settings'),
@@ -188,6 +195,9 @@ export default function Settings() {
 
     // Filter sidebar items based on user permissions
     const sidebarNavItems = allSidebarNavItems.filter(item => {
+        if (hasRole(auth.roles, 'superadmin') || auth.user?.type === 'superadmin') {
+            return !item.role || item.role === 'superadmin';
+        }
         // Check for both role and permission if both exist
         if (item.role && item.permission) {
             return hasRole(auth.roles, item.role) && hasPermission(auth.permissions, item.permission);
@@ -220,6 +230,7 @@ export default function Settings() {
     const salesOrderTemplatesRef = useRef<HTMLDivElement>(null);
     const invoiceTemplatesRef = useRef<HTMLDivElement>(null);
     const emailNotificationSettingsRef = useRef<HTMLDivElement>(null);
+    const dailySalesReportSettingsRef = useRef<HTMLDivElement>(null);
     const twilioNotificationSettingsRef = useRef<HTMLDivElement>(null);
     const slackNotificationSettingsRef = useRef<HTMLDivElement>(null);
 
@@ -252,6 +263,7 @@ export default function Settings() {
             const salesOrderTemplatesPosition = salesOrderTemplatesRef.current?.offsetTop || 0;
             const invoiceTemplatesPosition = invoiceTemplatesRef.current?.offsetTop || 0;
             const emailNotificationSettingsPosition = emailNotificationSettingsRef.current?.offsetTop || 0;
+            const dailySalesReportSettingsPosition = dailySalesReportSettingsRef.current?.offsetTop || 0;
             const twilioNotificationSettingsPosition = twilioNotificationSettingsRef.current?.offsetTop || 0;
             const slackNotificationSettingsPosition = slackNotificationSettingsRef.current?.offsetTop || 0;
 
@@ -297,6 +309,8 @@ export default function Settings() {
                 setActiveSection('slack-notification-settings');
             } else if (scrollPosition >= twilioNotificationSettingsPosition && twilioNotificationSettingsPosition > 0) {
                 setActiveSection('twilio-notification-settings');
+            } else if (scrollPosition >= dailySalesReportSettingsPosition && dailySalesReportSettingsPosition > 0) {
+                setActiveSection('daily-sales-report-settings');
             } else if (scrollPosition >= emailNotificationSettingsPosition && emailNotificationSettingsPosition > 0) {
                 setActiveSection('email-notification-settings');
             } else if (scrollPosition >= paymentSettingsPosition && paymentSettingsPosition > 0) {
@@ -444,6 +458,12 @@ export default function Settings() {
                             <EmailNotificationSettings />
                         </section>
                     )}
+                    {/* Daily Sales Report Settings Section */}
+                    {(hasPermission(auth.permissions, 'settings') || hasRole(auth.roles, 'company') || hasRole(auth.roles, 'superadmin') || hasRole(auth.roles, 'admin')) && (
+                        <section id="daily-sales-report-settings" ref={dailySalesReportSettingsRef} className="mb-8">
+                            <DailySalesReportSettings settings={systemSettings} />
+                        </section>
+                    )}
                     {/* Twilio Notification Settings Section */}
                     {(hasPermission(auth.permissions, 'manage-twilio-notifications') || hasRole(auth.roles, 'company')) && (
                         <section id="twilio-notification-settings" ref={twilioNotificationSettingsRef} className="mb-8">
@@ -542,7 +562,7 @@ export default function Settings() {
                     )}
 
                     {/* Google Mail (Gmail) Settings Section */}
-                    {(hasPermission(auth.permissions, 'settings') || hasRole(auth.roles, 'company')) && (
+                    {(hasPermission(auth.permissions, 'settings') || hasRole(auth.roles, 'company') || hasRole(auth.roles, 'superadmin') || auth.user?.type === 'superadmin') && (
                         <section id="google-mail-settings" ref={googleMailSettingsRef} className="mb-8">
                             <GoogleMailSettings settings={systemSettings} />
                         </section>

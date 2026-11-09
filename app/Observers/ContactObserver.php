@@ -57,7 +57,7 @@ class ContactObserver
         $userName = auth()->user()?->name ?? 'System';
 
         foreach ($changes as $field => $newValue) {
-            if (in_array($field, ['updated_at'])) continue;
+            if (in_array($field, ['updated_at', 'last_contacted_date'])) continue;
 
             $oldValue = $original[$field] ?? null;
 

@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Mail\SalesDailyReportMail;
 use App\Models\SalesDayPlan;
 use App\Models\User;
+use App\Services\MailConfigService;
+use App\Services\SalesDailyReportService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 
 class SendDailySalesDayPlanSummary extends Command
 {
@@ -16,24 +16,30 @@ class SendDailySalesDayPlanSummary extends Command
      *
      * @var string
      */
-    protected $signature = 'sales:send-daily-reports {--date= : Specific date to send reports for (YYYY-MM-DD)} {--company= : Specific company ID}';
+    protected $signature = 'sales:send-daily-reports 
+                            {--date= : Specific date to send reports for (YYYY-MM-DD)} 
+                            {--company= : Specific company ID}
+                            {--user= : Specific user ID}
+                            {--force : Force send even if no activity logged}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Send daily sales plans & reports for team members to managers';
+    protected $description = 'Send automated individual daily sales work reports to sales representatives with managers & admin in CC';
 
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(SalesDailyReportService $reportService)
     {
         $targetDate = $this->option('date') ?: Carbon::today()->toDateString();
         $companyOption = $this->option('company');
+        $userOption = $this->option('user');
+        $force = (bool) $this->option('force');
 
-        $this->info("Processing Sales Daily Reports for date: {$targetDate}");
+        $this->info("Processing automated daily sales work reports for date: {$targetDate}");
 
         $companiesQuery = User::whereIn('type', ['company', 'admin']);
         if ($companyOption) {
@@ -41,80 +47,98 @@ class SendDailySalesDayPlanSummary extends Command
         }
         $companies = $companiesQuery->get();
 
-        $sentCount = 0;
+        $totalSent = 0;
+        $totalSkipped = 0;
 
         foreach ($companies as $company) {
-            $dayPlans = SalesDayPlan::with(['user', 'creator', 'reviewer'])
-                ->where('created_by', $company->id)
-                ->whereDate('plan_date', $targetDate)
-                ->whereIn('status', ['submitted', 'completed', 'reviewed', 'in_progress'])
-                ->get();
+            $this->line("\n[Company #{$company->id}] {$company->name}");
 
-            if ($dayPlans->isEmpty()) {
-                continue;
-            }
+            // Load company settings
+            $companySettings = settings($company->id);
+            $timezone = $companySettings['defaultTimezone'] ?? $companySettings['timezone'] ?? config('app.timezone', 'UTC');
+            $nowInTz = Carbon::now($timezone);
+            $todayInTz = $nowInTz->toDateString();
 
-            // Resolve company managers once per company
-            $baseManagerEmails = User::where('created_by', $company->id)
-                ->where(function ($q) {
-                    $q->whereIn('type', ['sales-manager', 'manager', 'admin', 'company'])
-                      ->orWhereHas('roles', function ($rq) {
-                          $rq->whereIn('name', ['sales-manager', 'manager', 'sales manager', 'Team Lead', 'Sales Director', 'Director']);
-                      });
-                })
-                ->pluck('email')
-                ->filter()
-                ->toArray();
-
-            if (!empty($company->email)) {
-                $baseManagerEmails[] = $company->email;
-            }
-
-            foreach ($dayPlans as $plan) {
-                // Primary recipient: user/sales representative
-                $recipientEmail = $plan->user?->email ?: $company->email;
-                if (empty($recipientEmail) || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            // Automatic scheduling validation (when run without explicit --force or --date override)
+            if (!$force && empty($this->option('date'))) {
+                // Check if enabled
+                if (($companySettings['daily_report_enabled'] ?? 'on') === 'off') {
+                    $this->line(" - Daily reports disabled in settings. Skipping.");
                     continue;
                 }
 
-                // Collect manager CCs for this plan
-                $managerEmails = $baseManagerEmails;
-                if ($plan->reviewer && !empty($plan->reviewer->email)) {
-                    $managerEmails[] = $plan->reviewer->email;
+                // Check active days (weekdays vs everyday)
+                $scheduleDays = $companySettings['daily_report_days'] ?? 'weekdays';
+                if ($scheduleDays === 'weekdays' && $nowInTz->isWeekend()) {
+                    $this->line(" - Weekend skipping (configured for weekdays only).");
+                    continue;
                 }
 
-                $cleanRecipient = strtolower(trim($recipientEmail));
-                $managerCcList = array_values(array_unique(array_filter($managerEmails, function ($em) use ($cleanRecipient) {
-                    $clean = strtolower(trim($em));
-                    return filter_var($clean, FILTER_VALIDATE_EMAIL) && $clean !== $cleanRecipient;
-                })));
-
-                try {
-                    $mail = Mail::to($recipientEmail);
-                    if (!empty($managerCcList)) {
-                        $mail->cc($managerCcList);
-                    }
-                    $mail->send(new SalesDailyReportMail($plan, null, $managerCcList));
-
-                    $sentSummary = $recipientEmail;
-                    if (!empty($managerCcList)) {
-                        $sentSummary .= ' [CC: ' . implode(', ', $managerCcList) . ']';
-                    }
-
-                    $plan->update([
-                        'report_sent_at' => now(),
-                        'report_sent_to' => \Illuminate\Support\Str::limit($sentSummary, 250),
-                    ]);
-                    $sentCount++;
-                    $ccNote = !empty($managerCcList) ? " (CC: " . implode(', ', $managerCcList) . ")" : "";
-                    $this->line(" - Sent report of {$plan->user?->name} to {$recipientEmail}{$ccNote}");
-                } catch (\Exception $e) {
-                    $this->error(" - Error sending report for {$plan->user?->name}: " . $e->getMessage());
+                // Check if already sent today
+                if (($companySettings['daily_report_last_sent_date'] ?? null) === $todayInTz) {
+                    $this->line(" - Daily reports already sent today ({$todayInTz}). Skipping.");
+                    continue;
                 }
+
+                // Check configured send time
+                $sendTime = $companySettings['daily_report_send_time'] ?? '19:00';
+                $scheduledDateTime = Carbon::parse("{$todayInTz} {$sendTime}", $timezone);
+                if ($nowInTz->lt($scheduledDateTime)) {
+                    $this->line(" - Scheduled send time is {$sendTime} ({$timezone}). Current time is {$nowInTz->format('H:i')}. Will dispatch later.");
+                    continue;
+                }
+            }
+
+            // Configure dynamic SMTP mail settings for this company
+            MailConfigService::setDynamicConfigForCompany($company);
+
+            $forceIncludeIdle = $force || (($companySettings['daily_report_include_idle'] ?? 'off') === 'on');
+
+            // Fetch active sales team members for this company (strictly exclude dummy example accounts)
+            $usersQuery = User::where('created_by', $company->id)
+                ->where('status', 'active')
+                ->whereNotIn('type', ['client', 'customer'])
+                ->where('email', 'not like', '%@example.%')
+                ->where('email', 'not like', '%@test.%');
+
+            if ($userOption) {
+                $usersQuery->where('id', $userOption);
+            }
+
+            $users = $usersQuery->get();
+
+            if ($users->isEmpty()) {
+                $this->line(" - No team members found for this company.");
+                continue;
+            }
+
+            foreach ($users as $user) {
+                // Find existing plan if already created
+                $existingPlan = SalesDayPlan::where('created_by', $company->id)
+                    ->where('user_id', $user->id)
+                    ->whereDate('plan_date', $targetDate)
+                    ->first();
+
+                $result = $reportService->sendDailyReport($user, $targetDate, $company, $existingPlan, $forceIncludeIdle);
+
+                if ($result['success']) {
+                    $totalSent++;
+                    $this->info(" ✓ " . $result['message']);
+                } elseif (!empty($result['skipped'])) {
+                    $totalSkipped++;
+                    $this->line(" - " . $result['message']);
+                } else {
+                    $this->warn(" ✗ " . $result['message']);
+                }
+            }
+
+            // Mark date as dispatched for this company
+            if (empty($this->option('date'))) {
+                updateSetting('daily_report_last_sent_date', $todayInTz, $company->id);
             }
         }
 
-        $this->info("Completed sending {$sentCount} daily report(s).");
+        $this->info("\nDaily sales reporting completed: {$totalSent} sent, {$totalSkipped} skipped (idle/no activity).");
         return 0;
     }
 }

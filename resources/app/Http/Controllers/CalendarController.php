@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\GoogleCalendarService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -9,11 +10,23 @@ class CalendarController extends Controller
 {
     public function index(Request $request)
     {
+        $calendarService = new GoogleCalendarService();
+        $userId = auth()->id();
+        $isGoogleCalendarEnabled = $calendarService->isEnabled($userId);
+        $isGoogleCalendarAuthorized = $calendarService->isAuthorized($userId);
+
+        $calSettings = settings(createdBy()) ?: [];
+        if ($isGoogleCalendarEnabled) {
+            $calSettings['googleCalendarEnabled'] = '1';
+            $calSettings['is_googlecalendar_sync'] = '1';
+        }
+        $calSettings['is_google_calendar_connected'] = $isGoogleCalendarAuthorized;
+
         // Check if demo mode is enabled
         if (IsDemo()) {
             return Inertia::render('calendar/index', [
                 'events' => getDemoCalendarData(),
-                'settings' => settings(createdBy()),
+                'settings' => $calSettings,
             ]);
         }
 
@@ -22,10 +35,13 @@ class CalendarController extends Controller
         // Get meetings
         try {
             $meetings = \App\Models\Meeting::where('created_by', createdBy())
+                ->with(['assignedUser:id,name,email,avatar', 'attendees'])
                 ->get()
-                ->map(function($meeting) {
+                ->map(function($meeting) use ($userId) {
                     $startDateTime = $meeting->start_date->format('Y-m-d') . ' ' . $meeting->start_time->format('H:i:s');
                     $endDateTime = $meeting->end_date->format('Y-m-d') . ' ' . $meeting->end_time->format('H:i:s');
+                    $isMyEvent = $userId && ($meeting->assigned_to == $userId || $meeting->attendees->contains('attendee_id', $userId));
+
                     return [
                         'id' => 'meeting-' . $meeting->id,
                         'title' => $meeting->title,
@@ -40,7 +56,14 @@ class CalendarController extends Controller
                         'status' => $meeting->status,
                         'parent_name' => $meeting->parent_name ?? ($meeting->parent_type ? ucfirst(str_replace('_', ' ', $meeting->parent_type)) : null),
                         'startDateTime' => $meeting->start_time->format('H:i:s'),
-                        'endDateTime' => $meeting->end_time->format('H:i:s')
+                        'endDateTime' => $meeting->end_time->format('H:i:s'),
+                        'assigned_to' => $meeting->assigned_to,
+                        'assigned_user' => $meeting->assignedUser ? [
+                            'id' => $meeting->assignedUser->id,
+                            'name' => $meeting->assignedUser->name,
+                            'avatar' => $meeting->assignedUser->avatar,
+                        ] : null,
+                        'is_my_event' => $isMyEvent,
                     ];
                 });
             $events = $events->merge($meetings);
@@ -51,10 +74,13 @@ class CalendarController extends Controller
         // Get calls
         try {
             $calls = \App\Models\Call::where('created_by', createdBy())
+                ->with(['assignedUser:id,name,email,avatar', 'attendees'])
                 ->get()
-                ->map(function($call) {
+                ->map(function($call) use ($userId) {
                     $startDateTime = $call->start_date->format('Y-m-d') . ' ' . $call->start_time->format('H:i:s');
                     $endDateTime = $call->end_date->format('Y-m-d') . ' ' . $call->end_time->format('H:i:s');
+                    $isMyEvent = $userId && ($call->assigned_to == $userId || $call->attendees->contains('attendee_id', $userId));
+
                     return [
                         'id' => 'call-' . $call->id,
                         'title' => $call->title,
@@ -68,7 +94,14 @@ class CalendarController extends Controller
                         'status' => $call->status,
                         'parent_name' => $call->parent_name ?? ($call->parent_type ? ucfirst(str_replace('_', ' ', $call->parent_type)) : null),
                         'startDateTime' => $call->start_time->format('H:i:s'),
-                        'endDateTime' => $call->end_time->format('H:i:s')
+                        'endDateTime' => $call->end_time->format('H:i:s'),
+                        'assigned_to' => $call->assigned_to,
+                        'assigned_user' => $call->assignedUser ? [
+                            'id' => $call->assignedUser->id,
+                            'name' => $call->assignedUser->name,
+                            'avatar' => $call->assignedUser->avatar,
+                        ] : null,
+                        'is_my_event' => $isMyEvent,
                     ];
                 });
             $events = $events->merge($calls);
@@ -106,7 +139,7 @@ class CalendarController extends Controller
 
         return Inertia::render('calendar/index', [
             'events' => $events->values()->toArray(),
-            'settings' => settings(createdBy()),
+            'settings' => $calSettings,
         ]);
     }
 }

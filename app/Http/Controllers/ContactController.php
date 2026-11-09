@@ -260,6 +260,12 @@ class ContactController extends Controller
         $taskTypes = \App\Models\TaskType::where('created_by', $tenantId)->where('status', 'active')->orderBy('id')->get();
         $taskPriorities = \App\Models\TaskPriority::where('created_by', $tenantId)->where('status', 'active')->orderBy('level')->get();
 
+        try {
+            app(\App\Services\GoogleMailService::class)->syncEntityActivities('contact', $contact, $tenantId);
+        } catch (\Throwable $e) {
+            \Log::warning('Error syncing contact email activities: ' . $e->getMessage());
+        }
+
         $streamItems = $contact->activities()
             ->with('user:id,name,avatar')
             ->orderBy('created_at', 'asc')

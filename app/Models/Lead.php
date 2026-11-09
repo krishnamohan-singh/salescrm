@@ -27,12 +27,14 @@ class Lead extends BaseModel
         'status',
         'is_converted',
         'lead_status_id',
+        'stage_change_reason',
         'lead_source_id',
         'created_by',
         'creator_id',
         'assigned_to',
         'campaign_id',
         'services',
+        'last_contacted_date',
         'lead_integration_id',
         'integration_source',
         'external_lead_id',
@@ -42,6 +44,7 @@ class Lead extends BaseModel
         'is_converted' => 'boolean',
         'value' => 'decimal:2',
         'services' => 'array',
+        'last_contacted_date' => 'datetime',
     ];
 
     protected $appends = [

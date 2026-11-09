@@ -220,8 +220,8 @@ Route::match(['GET', 'POST'], 'payments/coingate/callback', [CoinGatePaymentCont
 Route::get('payments/xendit/success', [XenditPaymentController::class, 'success'])->name('xendit.success');
 Route::post('payments/xendit/callback', [XenditPaymentController::class, 'callback'])->name('xendit.callback');
 
-// PWA Manifest routes removed
-
+// Google Mail (Gmail) OAuth callback (public endpoint so Google OAuth redirect is not intercepted by auth middleware)
+Route::get('integrations/google-mail/callback', [\App\Http\Controllers\GoogleMailController::class, 'callback'])->name('google-mail.callback');
 
 Route::get('/translations/{locale}', [TranslationController::class, 'getTranslations'])->name('translations');
 Route::get('/refresh-language/{locale}', [TranslationController::class, 'refreshLanguage'])->name('refresh-language');
@@ -833,8 +833,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         // Services routes
-        Route::middleware('permission:manage-services')->group(function () {
-            Route::get('services', [ServiceController::class, 'index'])->middleware('permission:manage-services')->name('services.index');
+        Route::middleware('permission:manage-services|view-services')->group(function () {
+            Route::get('services', [ServiceController::class, 'index'])->name('services.index');
             Route::get('services/create', [ServiceController::class, 'create'])->middleware('permission:create-services')->name('services.create');
             Route::get('services/{service}', [ServiceController::class, 'show'])->middleware('permission:view-services')->name('services.show');
             Route::get('services/{service}/edit', [ServiceController::class, 'edit'])->middleware('permission:edit-services')->name('services.edit');
@@ -1035,6 +1035,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('sales-day-plans/{id}', [SalesDayPlanController::class, 'destroy'])->middleware('permission:delete-sales-day-plans')->name('sales-day-plans.destroy');
             Route::post('sales-day-plans/{id}/status', [SalesDayPlanController::class, 'updateStatus'])->name('sales-day-plans.update-status');
             Route::post('sales-day-plans/{id}/send-report', [SalesDayPlanController::class, 'sendReport'])->middleware('permission:send-sales-day-plans')->name('sales-day-plans.send-report');
+            Route::post('sales-day-plans-send-all', [SalesDayPlanController::class, 'sendAllReports'])->middleware('permission:send-sales-day-plans')->name('sales-day-plans.send-all-reports');
+            Route::post('sales-day-plans-report-settings', [SalesDayPlanController::class, 'updateReportSettings'])->name('sales-day-plans.report-settings');
             Route::post('sales-day-plans/{id}/review', [SalesDayPlanController::class, 'review'])->middleware('permission:review-sales-day-plans')->name('sales-day-plans.review');
             Route::post('sales-day-plans/{id}/approve-plan', [SalesDayPlanController::class, 'approvePlan'])->middleware('permission:review-sales-day-plans')->name('sales-day-plans.approve-plan');
             Route::post('sales-day-plans/{id}/request-revision', [SalesDayPlanController::class, 'requestRevision'])->middleware('permission:review-sales-day-plans')->name('sales-day-plans.request-revision');
@@ -1386,12 +1388,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Google Mail (Gmail) Integration & Timeline Capture routes
         Route::get('integrations/google-mail/connect', [\App\Http\Controllers\GoogleMailController::class, 'connect'])->name('google-mail.connect');
-        Route::get('integrations/google-mail/callback', [\App\Http\Controllers\GoogleMailController::class, 'callback'])->name('google-mail.callback');
         Route::post('integrations/google-mail/disconnect', [\App\Http\Controllers\GoogleMailController::class, 'disconnect'])->name('google-mail.disconnect');
         Route::post('integrations/google-mail/sync', [\App\Http\Controllers\GoogleMailController::class, 'sync'])->name('google-mail.sync');
         Route::post('integrations/google-mail/send', [\App\Http\Controllers\GoogleMailController::class, 'send'])->name('google-mail.send');
         Route::post('integrations/google-mail/test-sync', [\App\Http\Controllers\GoogleMailController::class, 'simulateTestSync'])->name('google-mail.test-sync');
         Route::get('api/google-mail/status', [\App\Http\Controllers\GoogleMailController::class, 'status'])->name('google-mail.status');
+
+        // Emails & Mailbox
+        Route::get('emails', [\App\Http\Controllers\CrmEmailController::class, 'index'])->name('emails.index');
+        Route::delete('emails/{id}', [\App\Http\Controllers\CrmEmailController::class, 'destroy'])->name('emails.destroy');
+        Route::post('emails/send', [\App\Http\Controllers\GoogleMailController::class, 'send'])->name('emails.send');
 
         // Document Folder management
        Route::middleware('permission:manage-document-folders')->group(function () {

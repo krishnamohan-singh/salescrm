@@ -26,6 +26,7 @@ use App\Observers\InvoiceObserver;
 use App\Observers\PurchaseOrderObserver;
 use App\Observers\TaskObserver;
 use App\Providers\AssetServiceProvider;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -55,6 +56,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // SuperAdmin and Company Admin have full access to do anything across the entire CRM
+        Gate::before(function ($user, $ability) {
+            $userType = strtolower($user->type ?? '');
+            if (in_array($userType, ['superadmin', 'super admin', 'company', 'admin'])) {
+                return true;
+            }
+            if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['superadmin', 'super admin', 'company', 'admin', 'Superadmin', 'Super Admin', 'Company', 'Admin'])) {
+                return true;
+            }
+            return null;
+        });
+
         // Register the UserObserver
         User::observe(UserObserver::class);
 

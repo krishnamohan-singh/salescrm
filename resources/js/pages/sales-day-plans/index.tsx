@@ -5,7 +5,8 @@ import {
     Plus, Eye, Edit, Trash2, MoreHorizontal, Send, CheckCircle2, 
     Calendar, User, Users, Phone, MessageSquare, TrendingUp, 
     Search, RefreshCw, LayoutGrid, AlignJustify, Award, AlertCircle,
-    CalendarCheck, Clock, MailCheck, MessageCircleQuestion, CheckCheck, Target
+    CalendarCheck, Clock, MailCheck, MessageCircleQuestion, CheckCheck, Target,
+    Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { hasPermission } from '@/utils/authorization';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { toast } from '@/components/custom-toast';
@@ -83,7 +85,7 @@ function UserAvatar({ name, src }: { name: string; src?: string }) {
 
 export default function SalesDayPlansIndex() {
     const { t } = useTranslation();
-    const { auth, dayPlans, stats = {}, teamUsers = [], canViewAll = false, filters: pageFilters = {} } = usePage().props as any;
+    const { auth, dayPlans, stats = {}, teamUsers = [], canViewAll = false, reportSettings = {}, filters: pageFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
 
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
@@ -228,21 +230,11 @@ export default function SalesDayPlansIndex() {
 
     if (canViewTargets) {
         pageActions.push({
-            label: t('Target Overview'),
+            label: t('Targets'),
             icon: <Target className="h-4 w-4 text-primary" />,
             variant: 'outline' as const,
             onClick: () => router.get(route('targets.index')),
             tooltip: t('View B2B Target Management Overview'),
-        });
-    }
-
-    if (canAllocate) {
-        pageActions.push({
-            label: t('Allocate Target'),
-            icon: <Plus className="h-4 w-4 text-emerald-600" />,
-            variant: 'outline' as const,
-            onClick: () => router.get(route('targets.create')),
-            tooltip: t('Assign new targets to sales team'),
         });
     }
 
@@ -253,6 +245,33 @@ export default function SalesDayPlansIndex() {
             variant: 'outline' as const,
             onClick: handleToggleMyData,
             tooltip: isViewingMyData ? t('Switch to All Team Plans') : t('Switch to My Day Plans'),
+        });
+    }
+
+    if (isCompanyOrAdmin || canSendReport) {
+        pageActions.push({
+            label: t('Dispatch Reports'),
+            icon: <Send className="h-4 w-4 text-blue-600 dark:text-blue-400" />,
+            variant: 'outline' as const,
+            onClick: () => {
+                if (confirm(t('Send daily work reports for all active sales representatives with managers in CC?'))) {
+                    router.post(route('sales-day-plans.send-all-reports'), {}, {
+                        preserveScroll: true,
+                        onSuccess: () => toast.success(t('Daily work reports dispatched successfully.')),
+                    });
+                }
+            },
+            tooltip: t('Dispatch daily work reports now for active sales team with managers in CC'),
+        });
+    }
+
+    if (isCompanyOrAdmin) {
+        pageActions.push({
+            label: '',
+            icon: <Settings className="h-4 w-4 text-muted-foreground" />,
+            variant: 'outline' as const,
+            onClick: () => router.get(route('settings') + '#daily-sales-report-settings'),
+            tooltip: t('Configure automated daily report settings in Settings'),
         });
     }
 
@@ -1006,6 +1025,8 @@ export default function SalesDayPlansIndex() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+
 
             {/* Delete Modal */}
             <CrudDeleteModal

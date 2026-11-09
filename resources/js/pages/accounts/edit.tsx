@@ -48,16 +48,33 @@ export default function AccountEdit() {
         shipping_postal_code: account.shipping_postal_code ?? '',
         shipping_country: account.shipping_country ?? '',
         assigned_to: String(account.assigned_to ?? ''),
+        last_contacted_date: account.last_contacted_date ? new Date(account.last_contacted_date).toISOString().slice(0, 16) : '',
         status: account.status ?? 'active',
         services: Array.isArray(account.services)
             ? account.services.map((s: any) => (typeof s === 'string' ? s : (s?.name || String(s?.id || ''))))
             : (typeof account.services === 'string' ? JSON.parse(account.services || '[]') : []),
     });
 
+    const getReturnUrl = () => {
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('accounts_list_return_url');
+            if (saved && (saved.startsWith('/accounts') || saved.includes('/accounts'))) return saved;
+        }
+        return route('accounts.index');
+    };
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/accounts') && !document.referrer.includes('/accounts/')) {
+            window.history.back();
+            return;
+        }
+        router.visit(getReturnUrl());
+    };
+
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Account Management') },
-        { title: t('Accounts'), href: route('accounts.index') },
+        { title: t('Accounts'), href: getReturnUrl() },
         { title: t('Edit') },
     ];
 
@@ -134,7 +151,7 @@ export default function AccountEdit() {
                 label: t('Back'),
                 icon: <ArrowLeft className="h-4 w-4 mr-2" />,
                 variant: 'outline',
-                onClick: () => router.visit(route('accounts.index')),
+                onClick: handleBack,
             }]}
             noPadding
         >
@@ -251,6 +268,17 @@ export default function AccountEdit() {
                         </div>
 
                         <div className="space-y-1.5">
+                            <Label>{t('Last Contacted Date')}</Label>
+                            <Input
+                                type="datetime-local"
+                                value={data.last_contacted_date}
+                                onChange={(e) => set('last_contacted_date', e.target.value)}
+                                className={errors.last_contacted_date ? 'border-red-500' : ''}
+                            />
+                            <FieldError message={errors.last_contacted_date} />
+                        </div>
+
+                        <div className="space-y-1.5">
                             <Label>{t('Status')}</Label>
                             <Select value={data.status} onValueChange={(v) => set('status', v)}>
                                 <SelectTrigger>
@@ -358,7 +386,7 @@ export default function AccountEdit() {
 
                 {/* ── Actions ── */}
                 <div className="flex justify-end gap-3 pt-1">
-                    <Button type="button" variant="outline" onClick={() => router.visit(route('accounts.index'))}>
+                    <Button type="button" variant="outline" onClick={handleBack}>
                         {t('Cancel')}
                     </Button>
                     <Button type="submit" disabled={processing}>

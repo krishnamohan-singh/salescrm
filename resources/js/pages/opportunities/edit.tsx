@@ -32,6 +32,7 @@ export default function OpportunityEdit() {
         opportunity_source_id: String(opportunity.opportunity_source_id || ''),
         notes: opportunity.notes || '',
         assigned_to: String(opportunity.assigned_to || ''),
+        last_contacted_date: opportunity.last_contacted_date ? new Date(opportunity.last_contacted_date).toISOString().slice(0, 16) : '',
         status: opportunity.status || 'active',
         products: (opportunity.products || []).map((p: any) => ({
             product_id: String(p.id),
@@ -40,10 +41,26 @@ export default function OpportunityEdit() {
         })),
     });
 
+    const getReturnUrl = () => {
+        if (typeof window !== 'undefined') {
+            const saved = sessionStorage.getItem('opportunities_list_return_url');
+            if (saved && (saved.startsWith('/opportunities') || saved.includes('/opportunities'))) return saved;
+        }
+        return route('opportunities.index');
+    };
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1 && document.referrer && document.referrer.includes('/opportunities') && !document.referrer.includes('/opportunities/')) {
+            window.history.back();
+            return;
+        }
+        router.visit(getReturnUrl());
+    };
+
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
         { title: t('Opportunity Management') },
-        { title: t('Opportunities'), href: route('opportunities.index') },
+        { title: t('Opportunities'), href: getReturnUrl() },
         { title: t('Edit') },
     ];
 
@@ -157,7 +174,7 @@ export default function OpportunityEdit() {
                 label: t('Back'),
                 icon: <ArrowLeft className="h-4 w-4 mr-2" />,
                 variant: 'outline',
-                onClick: () => router.visit(route('opportunities.index')),
+                onClick: handleBack,
             }]}
             noPadding
         >
@@ -216,6 +233,20 @@ export default function OpportunityEdit() {
                                     />
                                     </div>
                                     {errors.close_date && <p className="text-xs text-red-500">{errors.close_date}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="last_contacted_date" className="text-sm font-medium">
+                                        {t('Last Contacted Date')}
+                                    </Label>
+                                    <Input
+                                        id="last_contacted_date"
+                                        type="datetime-local"
+                                        value={data.last_contacted_date}
+                                        onChange={(e) => handleInputChange('last_contacted_date', e.target.value)}
+                                        className={errors.last_contacted_date ? 'border-red-500' : ''}
+                                    />
+                                    {errors.last_contacted_date && <p className="text-xs text-red-500">{errors.last_contacted_date}</p>}
                                 </div>
 
                                 <div className="space-y-2">
@@ -495,7 +526,7 @@ export default function OpportunityEdit() {
 
                 {/* Actions */}
                 <div className="flex justify-end space-x-4">
-                    <Button type="button" variant="outline" onClick={() => router.visit(route('opportunities.index'))}>
+                    <Button type="button" variant="outline" onClick={handleBack}>
                         {t('Cancel')}
                     </Button>
                     <Button type="submit" disabled={processing}>

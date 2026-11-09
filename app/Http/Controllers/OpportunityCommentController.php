@@ -35,6 +35,8 @@ class OpportunityCommentController extends Controller
             'created_by' => createdBy()
         ]);
 
+        $opportunity->update(['last_contacted_date' => now()]);
+
         return redirect()->back()->with('success', __('Comment added successfully.'));
     }
 

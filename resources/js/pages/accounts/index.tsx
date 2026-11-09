@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { hasPermission } from '@/utils/authorization';
 import { CrudTable } from '@/components/CrudTable';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { SendEmailModal } from '@/components/send-email-modal';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
@@ -28,6 +29,8 @@ export default function Accounts() {
         else if (flash?.warning) toast.warning(t(flash.warning));
     }, [flash]);
     const permissions = auth?.permissions || [];
+    const [selectedEmailAccount, setSelectedEmailAccount] = useState<any>(null);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     // State
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -35,6 +38,8 @@ export default function Accounts() {
     const [selectedIndustry, setSelectedIndustry] = useState(pageFilters.account_industry_id || 'all');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
     const [selectedAssignee, setSelectedAssignee] = useState(pageFilters.assigned_to || 'all');
+    const [selectedDatePeriod, setSelectedDatePeriod] = useState(pageFilters.date_period || 'all');
+    const [selectedDateField, setSelectedDateField] = useState(pageFilters.date_field || 'created_at');
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState<any>(null);
     const [activeView, setActiveView] = useState(
@@ -45,7 +50,7 @@ export default function Accounts() {
     useEffect(() => {
         if (!pageInitialState) applyFilters();
         setPageInitialState(false);
-    }, [selectedType, selectedIndustry, selectedStatus, selectedAssignee]);
+    }, [selectedType, selectedIndustry, selectedStatus, selectedAssignee, selectedDatePeriod, selectedDateField]);
 
     const isViewingMyData = selectedAssignee === String(auth?.user?.id);
 
@@ -56,12 +61,12 @@ export default function Accounts() {
 
     // Check if any filters are active
     const hasActiveFilters = () => {
-        return searchTerm !== '' || selectedType !== 'all' || selectedIndustry !== 'all' || selectedStatus !== 'all' || selectedAssignee !== 'all';
+        return searchTerm !== '' || selectedType !== 'all' || selectedIndustry !== 'all' || selectedStatus !== 'all' || selectedAssignee !== 'all' || selectedDatePeriod !== 'all';
     };
 
     // Count active filters
     const activeFilterCount = () => {
-        return (selectedType !== 'all' ? 1 : 0) + (selectedIndustry !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0);
+        return (selectedType !== 'all' ? 1 : 0) + (selectedIndustry !== 'all' ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedAssignee !== 'all' ? 1 : 0) + (selectedDatePeriod !== 'all' ? 1 : 0);
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -78,6 +83,8 @@ export default function Accounts() {
             account_industry_id: selectedIndustry !== 'all' ? selectedIndustry : undefined,
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: pageFilters.sort_field || undefined,
             sort_direction: pageFilters.sort_direction || undefined,
             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -94,20 +101,34 @@ export default function Accounts() {
             account_industry_id: selectedIndustry !== 'all' ? selectedIndustry : undefined,
             status: selectedStatus !== 'all' ? selectedStatus : undefined,
             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
             sort_field: field,
             sort_direction: direction,
             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
         }, { preserveState: true, preserveScroll: true });
     };
 
+    const saveCurrentListUrl = () => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('accounts_list_return_url', window.location.pathname + window.location.search);
+        }
+    };
+
+    useEffect(() => {
+        saveCurrentListUrl();
+    }, [accounts?.current_page, activeView, pageFilters]);
+
     const handleAction = (action: string, item: any) => {
         setCurrentItem(item);
 
         switch (action) {
             case 'view':
+                saveCurrentListUrl();
                 router.get(route('accounts.show', item.id));
                 break;
             case 'edit':
+                saveCurrentListUrl();
                 router.visit(route('accounts.edit', item.id));
                 break;
             case 'delete':
@@ -123,6 +144,7 @@ export default function Accounts() {
 
     const handleRowClick = (account: any, e?: React.MouseEvent) => {
         if (!canView) return;
+        saveCurrentListUrl();
         if (e && (e.metaKey || e.ctrlKey)) {
             window.open(route('accounts.show', account.id), '_blank');
             return;
@@ -307,6 +329,27 @@ export default function Accounts() {
             }
         },
         {
+            key: 'last_contacted_date',
+            label: t('Last Contacted'),
+            sortable: true,
+            render: (value: any) => {
+                if (!value) {
+                    return (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                            <Phone className="h-3 w-3 text-gray-400" />
+                            {t('Never')}
+                        </span>
+                    );
+                }
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        <Phone className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                        {window.appSettings?.formatDateTime(value, false) || new Date(value).toLocaleDateString()}
+                    </span>
+                );
+            }
+        },
+        {
             key: 'created_at',
             label: t('Created At'),
             sortable: true,
@@ -418,6 +461,36 @@ export default function Accounts() {
                                     label: user.name
                                 }))
                             ]
+                        },
+                        {
+                            name: 'date_period',
+                            label: t('Period'),
+                            type: 'select' as const,
+                            value: selectedDatePeriod,
+                            onChange: setSelectedDatePeriod,
+                            options: [
+                                { value: 'all', label: t('All Time') },
+                                { value: 'today', label: t('Today') },
+                                { value: 'yesterday', label: t('Yesterday') },
+                                { value: 'this_week', label: t('This Week') },
+                                { value: 'last_week', label: t('Last Week') },
+                                { value: 'this_month', label: t('This Month') },
+                                { value: 'last_month', label: t('Last Month') },
+                                { value: 'this_year', label: t('This Year') },
+                                { value: 'last_year', label: t('Last Year') },
+                                { value: 'never_contacted', label: t('Never Contacted') },
+                            ]
+                        },
+                        {
+                            name: 'date_field',
+                            label: t('Filter Date By'),
+                            type: 'select' as const,
+                            value: selectedDateField,
+                            onChange: setSelectedDateField,
+                            options: [
+                                { value: 'created_at', label: t('Created Date') },
+                                { value: 'last_contacted_date', label: t('Last Contacted Date') },
+                            ]
                         }
                     ]}
                     hasActiveFilters={hasActiveFilters}
@@ -435,6 +508,8 @@ export default function Accounts() {
                             account_industry_id: selectedIndustry !== 'all' ? selectedIndustry : undefined,
                             status: selectedStatus !== 'all' ? selectedStatus : undefined,
                             assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                            date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                            date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                             sort_field: pageFilters.sort_field || undefined,
                             sort_direction: pageFilters.sort_direction || undefined,
                             ...(parseInt(pageFilters.per_page) !== 10 && pageFilters.per_page && { per_page: pageFilters.per_page }),
@@ -472,7 +547,7 @@ export default function Accounts() {
                         total={accounts?.total || 0}
                         links={accounts?.links}
                         entityName={t("accounts")}
-                        onPageChange={(url) => router.get(url)}
+                        onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                         currentPerPage={pageFilters.per_page?.toString() || "10"}
                         onPerPageChange={(value) => {
                             router.get(route('accounts.index'), {
@@ -483,6 +558,8 @@ export default function Accounts() {
                                 account_industry_id: selectedIndustry !== 'all' ? selectedIndustry : undefined,
                                 status: selectedStatus !== 'all' ? selectedStatus : undefined,
                                 assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                                date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                                date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                                 sort_field: pageFilters.sort_field || undefined,
                                 sort_direction: pageFilters.sort_direction || undefined,
                                 ...(parseInt(value) !== 10 && { per_page: parseInt(value) }),
@@ -541,6 +618,12 @@ export default function Accounts() {
                                                     <DropdownMenuItem onClick={() => handleAction('edit', account)}>
                                                         <Edit className="h-4 w-4 mr-2" />
                                                         <span>{t('Edit')}</span>
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {(account.email || account.alternate_email) && (
+                                                    <DropdownMenuItem onClick={() => { setSelectedEmailAccount(account); setIsEmailModalOpen(true); }}>
+                                                        <Mail className="h-4 w-4 mr-2 text-primary" />
+                                                        <span>{t('Send Email')}</span>
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuSeparator />
@@ -615,9 +698,25 @@ export default function Accounts() {
 
                                     {/* Footer: date left, assigned avatar right */}
                                     <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
-                                            <Calendar className="h-3.5 w-3.5 text-gray-500 shrink-0" />
-                                            <span>{window.appSettings?.formatDateTime(account.created_at, false) || new Date(account.created_at).toLocaleDateString()}</span>
+                                        <div className="flex items-center gap-1.5 flex-wrap text-xs font-medium text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-1">
+                                                <Calendar className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                                                <span>{window.appSettings?.formatDateTime(account.created_at, false) || new Date(account.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                                <span
+                                                    className={cn(
+                                                        "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                                                        account.last_contacted_date
+                                                            ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800"
+                                                            : "text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700"
+                                                    )}
+                                                    title={t('Last Contacted')}
+                                                >
+                                                    <Phone className="h-2.5 w-2.5" />
+                                                    {account.last_contacted_date
+                                                        ? (window.appSettings?.formatDateTime(account.last_contacted_date, false) || new Date(account.last_contacted_date).toLocaleDateString())
+                                                        : t('Never')}
+                                                </span>
                                         </div>
                                         {account.assigned_user && (
                                             <div className="flex items-center gap-1.5">
@@ -651,7 +750,7 @@ export default function Accounts() {
                             total={accounts?.total || 0}
                             links={accounts?.links}
                             entityName={t("accounts")}
-                            onPageChange={(url) => router.get(url)}
+                            onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                             perPageOptions={[12, 24, 48, 96]}
                             currentPerPage={pageFilters.per_page?.toString() || '12'}
                             onPerPageChange={(value) => {
@@ -663,6 +762,8 @@ export default function Accounts() {
                                     account_industry_id: selectedIndustry !== 'all' ? selectedIndustry : undefined,
                                     status: selectedStatus !== 'all' ? selectedStatus : undefined,
                                     assigned_to: selectedAssignee !== 'all' ? selectedAssignee : undefined,
+                                    date_period: selectedDatePeriod !== 'all' ? selectedDatePeriod : undefined,
+                                    date_field: selectedDatePeriod !== 'all' ? selectedDateField : undefined,
                                     sort_field: pageFilters.sort_field || undefined,
                                     sort_direction: pageFilters.sort_direction || undefined,
                                     ...(parseInt(value) !== 12 && { per_page: parseInt(value) }),
@@ -681,6 +782,19 @@ export default function Accounts() {
                 itemName={currentItem?.name || ''}
                 entityName={t('account')}
             />
+
+            {/* Send Email Modal */}
+            {selectedEmailAccount && (
+                <SendEmailModal
+                    isOpen={isEmailModalOpen}
+                    onClose={() => { setIsEmailModalOpen(false); setSelectedEmailAccount(null); }}
+                    recipientEmail={selectedEmailAccount.email || selectedEmailAccount.alternate_email || ''}
+                    recipientName={selectedEmailAccount.name}
+                    entityType="account"
+                    entityId={selectedEmailAccount.id}
+                    entityName={selectedEmailAccount.name}
+                />
+            )}
         </PageTemplate>
     );
 }

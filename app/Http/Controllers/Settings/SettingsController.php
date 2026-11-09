@@ -101,6 +101,32 @@ class SettingsController extends Controller
             $currentWorkspace = Workspace::find($workspaceId);
         }
 
+        // Attach resolved Google Mail integration state
+        $googleSummary = app(\App\Services\GoogleMailService::class)->getStatusSummary($user->id);
+        $systemSettings['googleMailConnected'] = $googleSummary['isConnected'] ? '1' : '0';
+        $systemSettings['googleMailConnectedEmail'] = $googleSummary['connectedEmail'] ?: '';
+        $systemSettings['googleMailConnectedName'] = $googleSummary['connectedName'] ?: '';
+        $systemSettings['googleMailLastSyncAt'] = $googleSummary['lastSyncAt'];
+        $superAdmin = \App\Models\User::where('type', 'superadmin')->first();
+        $superAdminId = $superAdmin ? $superAdmin->id : 1;
+
+        $globalClientId = getSetting('googleMailClientId', null, $superAdminId)
+            ?: getSetting('googleMailClientId', null, 1)
+            ?: config('services.google.client_id', '');
+
+        $globalClientSecret = getSetting('googleMailClientSecret', null, $superAdminId)
+            ?: getSetting('googleMailClientSecret', null, 1)
+            ?: config('services.google.client_secret', '');
+
+        if (empty($systemSettings['googleMailClientId'])) {
+            $systemSettings['googleMailClientId'] = $globalClientId;
+        }
+        if (empty($systemSettings['googleMailClientSecret'])) {
+            $systemSettings['googleMailClientSecret'] = $globalClientSecret;
+        }
+
+        $systemSettings['googleOAuthGlobalConfigured'] = !empty($globalClientId) && !empty($globalClientSecret);
+
         return Inertia::render('settings/index', [
             'systemSettings' => $systemSettings,
             'settings' => $systemSettings, // For helper functions

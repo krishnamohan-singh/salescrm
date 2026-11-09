@@ -13,6 +13,7 @@ import { hasPermission } from '@/utils/authorization';
 import { CrudTable } from '@/components/CrudTable';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { SendEmailModal } from '@/components/send-email-modal';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
@@ -26,6 +27,8 @@ export default function Contacts() {
     const canView = hasPermission(permissions, 'view-contacts');
 
     // State
+    const [selectedEmailContact, setSelectedEmailContact] = useState<any>(null);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedAccount, setSelectedAccount] = useState(pageFilters.account_id || 'all');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
@@ -96,11 +99,22 @@ export default function Contacts() {
         }, { preserveState: true, preserveScroll: true });
     };
 
+    const saveCurrentListUrl = () => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('contacts_list_return_url', window.location.pathname + window.location.search);
+        }
+    };
+
+    useEffect(() => {
+        saveCurrentListUrl();
+    }, [contacts?.current_page, activeView, pageFilters]);
+
     const handleAction = (action: string, item: any) => {
         setCurrentItem(item);
 
         switch (action) {
             case 'view':
+                saveCurrentListUrl();
                 router.get(route('contacts.show', item.id));
                 break;
             case 'edit':
@@ -467,7 +481,7 @@ export default function Contacts() {
                         total={contacts?.total || 0}
                         links={contacts?.links}
                         entityName={t("contacts")}
-                        onPageChange={(url) => router.get(url)}
+                        onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                         currentPerPage={pageFilters.per_page?.toString() || "10"}
                         onPerPageChange={(value) => {
                             router.get(route('contacts.index'), {
@@ -534,6 +548,12 @@ export default function Contacts() {
                                                     <DropdownMenuItem onClick={() => handleAction('edit', contact)}>
                                                         <Edit className="h-4 w-4 mr-2" />
                                                         <span>{t('Edit')}</span>
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {contact.email && (
+                                                    <DropdownMenuItem onClick={() => { setSelectedEmailContact(contact); setIsEmailModalOpen(true); }}>
+                                                        <Mail className="h-4 w-4 mr-2 text-primary" />
+                                                        <span>{t('Send Email')}</span>
                                                     </DropdownMenuItem>
                                                 )}
                                                 <DropdownMenuSeparator />
@@ -625,7 +645,7 @@ export default function Contacts() {
                             total={contacts?.total || 0}
                             links={contacts?.links}
                             entityName={t("contacts")}
-                            onPageChange={(url) => router.get(url)}
+                            onPageChange={(url) => router.get(url, {}, { preserveState: true, preserveScroll: true })}
                             perPageOptions={[12, 24, 48, 96]}
                             currentPerPage={pageFilters.per_page?.toString() || '12'}
                             onPerPageChange={(value) => {
@@ -724,6 +744,18 @@ export default function Contacts() {
                 itemName={currentItem?.name || ''}
                 entityName={t('contact')}
             />
+            {/* Send Email Modal */}
+            {selectedEmailContact && (
+                <SendEmailModal
+                    isOpen={isEmailModalOpen}
+                    onClose={() => { setIsEmailModalOpen(false); setSelectedEmailContact(null); }}
+                    recipientEmail={selectedEmailContact.email || ''}
+                    recipientName={selectedEmailContact.name}
+                    entityType="contact"
+                    entityId={selectedEmailContact.id}
+                    entityName={selectedEmailContact.name}
+                />
+            )}
         </PageTemplate>
     );
 }

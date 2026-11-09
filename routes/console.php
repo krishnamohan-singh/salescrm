@@ -192,5 +192,109 @@ Artisan::command('users:set-passwords {password=password} {email?}', function ($
     $this->info("Done! Updated {$users->count()} user(s).");
 });
 
+// Schedule background Google Mail synchronization every 5 minutes
+\Illuminate\Support\Facades\Schedule::command('gmail:sync --limit=200')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Automatically check and dispatch daily evening sales work reports based on company configured time
+\Illuminate\Support\Facades\Schedule::command('sales:send-daily-reports')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Artisan::command('perms:sync-services', function () {
+    $perms = [
+        [
+            'name' => 'manage-services',
+            'module' => 'services',
+            'label' => 'Manage Services',
+            'description' => 'Can view and manage services catalog and mappings',
+            'guard_name' => 'web',
+        ],
+        [
+            'name' => 'view-services',
+            'module' => 'services',
+            'label' => 'View Services',
+            'description' => 'Can view services and mapped entities',
+            'guard_name' => 'web',
+        ],
+        [
+            'name' => 'create-services',
+            'module' => 'services',
+            'label' => 'Create Services',
+            'description' => 'Can create new services in catalog',
+            'guard_name' => 'web',
+        ],
+        [
+            'name' => 'edit-services',
+            'module' => 'services',
+            'label' => 'Edit Services',
+            'description' => 'Can edit service details and pricing',
+            'guard_name' => 'web',
+        ],
+        [
+            'name' => 'delete-services',
+            'module' => 'services',
+            'label' => 'Delete Services',
+            'description' => 'Can delete services from catalog',
+            'guard_name' => 'web',
+        ],
+        [
+            'name' => 'toggle-status-services',
+            'module' => 'services',
+            'label' => 'Toggle Status Services',
+            'description' => 'Can activate or deactivate services',
+            'guard_name' => 'web',
+        ],
+    ];
+
+    foreach ($perms as $p) {
+        \Spatie\Permission\Models\Permission::updateOrCreate(
+            ['name' => $p['name'], 'guard_name' => 'web'],
+            $p
+        );
+        $this->info("Permission created/updated: {$p['name']}");
+    }
+
+    $permNames = array_column($perms, 'name');
+
+    // Assign to admin and company roles
+    $roles = \Spatie\Permission\Models\Role::where('guard_name', 'web')->get();
+    foreach ($roles as $role) {
+        $rName = strtolower($role->name);
+        if (
+            str_contains($rName, 'admin') ||
+            str_contains($rName, 'company') ||
+            str_contains($rName, 'super') ||
+            str_contains($rName, 'owner') ||
+            str_contains($rName, 'founder') ||
+            str_contains($rName, 'director')
+        ) {
+            try {
+                $role->givePermissionTo($permNames);
+                $this->info("Assigned services permissions to role: {$role->name}");
+            } catch (\Throwable $e) {
+                // Ignore if already assigned
+            }
+        }
+    }
+
+    // Direct assignment to admin users
+    $adminUsers = \App\Models\User::whereIn('type', ['company', 'admin', 'superadmin', 'super admin'])->get();
+    foreach ($adminUsers as $user) {
+        try {
+            $user->givePermissionTo($permNames);
+            $this->info("Assigned services permissions to user: {$user->email} ({$user->type})");
+        } catch (\Throwable $e) {
+            // Ignore if already assigned
+        }
+    }
+
+    app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+    $this->info("Services permissions successfully synced and granted to all admins.");
+});
+
 
 

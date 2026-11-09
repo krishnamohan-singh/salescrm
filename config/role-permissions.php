@@ -17,6 +17,7 @@ return [
         'appointments',
         'businesses',
         'settings',
+        'services',
     ],
 
     'company' => [
@@ -34,6 +35,7 @@ return [
         'brands',
         'categories',
         'products',
+        'services',
         'contacts',
         'accounts',
         'account_types',
@@ -72,5 +74,6 @@ return [
         // 'notification_templates',
         'reports',
         'attendance',
+        'emails',
     ]
 ];

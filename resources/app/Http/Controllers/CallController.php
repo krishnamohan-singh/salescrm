@@ -57,6 +57,12 @@ class CallController extends Controller
         $allContacts = \App\Models\Contact::where('created_by', createdBy())->select('id', 'name')->get();
         $allLeads = \App\Models\Lead::where('created_by', createdBy())->select('id', 'name')->get();
 
+        $calendarService = new GoogleCalendarService();
+        $calSettings = settings(createdBy()) ?: [];
+        if ($calendarService->isEnabled(auth()->id())) {
+            $calSettings['googleCalendarEnabled'] = '1';
+        }
+
         return Inertia::render('calls/index', [
             'calls' => $calls,
             'users' => $users,
@@ -64,7 +70,7 @@ class CallController extends Controller
             'allContacts' => $allContacts,
             'allLeads' => $allLeads,
             'filters' => $request->all(['search', 'status', 'assigned_to', 'sort_field', 'sort_direction', 'per_page', 'page']),
-            'settings' => settings(createdBy()),
+            'settings' => $calSettings,
         ]);
     }
 
@@ -123,35 +129,45 @@ class CallController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:65535',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i',
-            'parent_module' => 'required|in:none,lead,account,contact,opportunity,case,project',
-            'parent_id' => 'required|integer|min:1',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'start_time' => 'nullable',
+            'end_time' => 'nullable',
+            'parent_module' => 'nullable|in:none,lead,account,contact,opportunity,case,project',
+            'parent_id' => 'nullable',
             'status' => 'nullable|in:planned,held,not_held',
-            'assigned_to' => 'required|exists:users,id',
-            'attendees' => 'required|array|min:1',
-            'attendees.*.type' => 'required_with:attendees|in:user,contact,lead',
-            'attendees.*.id' => 'required_with:attendees|integer|min:1',
+            'assigned_to' => 'nullable',
+            'attendees' => 'nullable|array',
+            'attendees.*.type' => 'nullable|in:user,contact,lead',
+            'attendees.*.id' => 'nullable',
             'sync_with_google_calendar' => 'nullable|boolean',
         ]);
 
-        // Validate end datetime is after start datetime
-        $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
-        $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
-        $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDate . ' ' . $validated['start_time']);
-        $endDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $endDate . ' ' . $validated['end_time']);
+        $validated['created_by'] = createdBy();
+        $validated['status'] = $validated['status'] ?? 'planned';
+        $validated['title'] = !empty(trim($validated['title'] ?? '')) ? trim($validated['title']) : __('Untitled Call');
 
-        if ($endDateTime->lte($startDateTime)) {
-            return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+        $startDateTime = null;
+        $endDateTime = null;
+        if (!empty($validated['start_date']) && !empty($validated['start_time']) && !empty($validated['end_date']) && !empty($validated['end_time'])) {
+            $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
+            $startDateTime = \Carbon\Carbon::parse($startDate . ' ' . $validated['start_time']);
+            $endDateTime = \Carbon\Carbon::parse($endDate . ' ' . $validated['end_time']);
+
+            if ($endDateTime->lte($startDateTime)) {
+                return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+            }
         }
 
-        // Check attendee availability
-        if (isset($validated['attendees'])) {
+        // Check attendee availability (only for planned/scheduled calls)
+        if ($startDateTime && $endDateTime && isset($validated['attendees']) && is_array($validated['attendees']) && ($validated['status'] ?? 'planned') !== 'held') {
             foreach ($validated['attendees'] as $attendee) {
+                if (empty($attendee['type']) || empty($attendee['id'])) {
+                    continue;
+                }
                 $callConflict = CallAttendee::where('attendee_type', $attendee['type'])
                     ->where('attendee_id', $attendee['id'])
                     ->whereHas('call', function ($q) use ($startDateTime, $endDateTime) {
@@ -179,13 +195,10 @@ class CallController extends Controller
             }
         }
 
-        $validated['created_by'] = createdBy();
-        $validated['status'] = $validated['status'] ?? 'planned';
-
         // Clean up nullable fields
-        $validated['parent_module'] = ($validated['parent_module'] ?? null) === 'none' ? null : ($validated['parent_module'] ?? null);
-        $validated['parent_id'] = empty($validated['parent_id']) || $validated['parent_id'] === 'select' ? null : (int)$validated['parent_id'];
-        $validated['assigned_to'] = empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned' ? null : (int)$validated['assigned_to'];
+        $validated['parent_module'] = (empty($validated['parent_module']) || $validated['parent_module'] === 'none') ? null : $validated['parent_module'];
+        $validated['parent_id'] = (empty($validated['parent_id']) || $validated['parent_id'] === 'select') ? null : (int)$validated['parent_id'];
+        $validated['assigned_to'] = (empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned') ? null : (int)$validated['assigned_to'];
 
         // Validate parent_id exists if parent_module is set
         if ($validated['parent_module'] && $validated['parent_id']) {
@@ -194,7 +207,20 @@ class CallController extends Controller
 
         $call = Call::create($validated);
 
-        if ($call && $request->sync_with_google_calendar) {
+        if (isset($validated['attendees']) && is_array($validated['attendees'])) {
+            foreach ($validated['attendees'] as $attendee) {
+                if (!empty($attendee['type']) && !empty($attendee['id'])) {
+                    CallAttendee::create([
+                        'call_id' => $call->id,
+                        'attendee_type' => $attendee['type'],
+                        'attendee_id' => $attendee['id'],
+                    ]);
+                }
+            }
+        }
+
+        if ($call && $request->sync_with_google_calendar && $call->start_date) {
+            $call->load('attendees');
             $calendarService = new GoogleCalendarService();
             $eventId = $calendarService->createEvent($call, createdBy(), 'call');
             if ($eventId) {
@@ -202,55 +228,97 @@ class CallController extends Controller
             }
         }
 
-        if (isset($validated['attendees'])) {
-            foreach ($validated['attendees'] as $attendee) {
-                CallAttendee::create([
-                    'call_id' => $call->id,
-                    'attendee_type' => $attendee['type'],
-                    'attendee_id' => $attendee['id'],
-                ]);
-            }
-        }
-
         // Create activity for parent modules
         if ($call->parent_module && $call->parent_id) {
+            $isHeld = ($call->status === 'held');
+            $actionVerb = $isHeld ? 'logged a call' : 'created a call';
+            $activityType = $isHeld ? 'Call Logged' : 'Call Created';
+            $timeText = '';
+            if ($call->start_date) {
+                $timeText = ($isHeld ? 'Call held on ' : 'Call scheduled for ') . date('M j, Y', strtotime($call->start_date)) . ($call->start_time ? ' at ' . date('g:i A', strtotime($call->start_time)) : '');
+            } else {
+                $timeText = $isHeld ? 'Call held' : 'Call scheduled';
+            }
+            $callDesc = $timeText . ($call->description ? "\nDiscussion: " . $call->description : '');
+
+            $callContactDate = now();
+            if ($call->start_date) {
+                try {
+                    $callTime = $call->start_time ?: '00:00:00';
+                    $callContactDate = \Carbon\Carbon::parse($call->start_date . ' ' . $callTime);
+                } catch (\Exception $e) {}
+            }
+
             switch ($call->parent_module) {
                 case 'account':
+                    \App\Models\Account::where('id', $call->parent_id)->update(['last_contacted_date' => $callContactDate]);
                     \App\Models\AccountActivity::create([
                         'account_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
                     break;
                 case 'lead':
+                    \App\Models\Lead::where('id', $call->parent_id)->update(['last_contacted_date' => $callContactDate]);
                     \App\Models\LeadActivity::create([
                         'lead_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
                     break;
                 case 'opportunity':
+                    \App\Models\Opportunity::where('id', $call->parent_id)->update(['last_contacted_date' => $callContactDate]);
                     \App\Models\OpportunityActivity::create([
                         'opportunity_id' => $call->parent_id,
                         'user_id' => auth()->id(),
-                        'activity_type' => 'Call Created',
-                        'title' => auth()->user()->name . ' created a call: ' . $call->title,
-                        'description' => 'Call scheduled for ' . date('M j, Y', strtotime($call->start_date)) . ' at ' . date('g:i A', strtotime($call->start_time)),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
                         'created_by' => createdBy()
                     ]);
+                    break;
+                case 'contact':
+                    \App\Models\ContactActivity::create([
+                        'contact_id' => $call->parent_id,
+                        'user_id' => auth()->id(),
+                        'activity_type' => $activityType,
+                        'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title,
+                        'description' => $callDesc,
+                        'created_by' => createdBy()
+                    ]);
+                    $contact = \App\Models\Contact::find($call->parent_id);
+                    if ($contact && $contact->account_id) {
+                        \App\Models\Account::where('id', $contact->account_id)->update(['last_contacted_date' => $callContactDate]);
+                        \App\Models\AccountActivity::create([
+                            'account_id' => $contact->account_id,
+                            'user_id' => auth()->id(),
+                            'activity_type' => $activityType,
+                            'title' => auth()->user()->name . ' ' . $actionVerb . ': ' . $call->title . ' (Contact: ' . $contact->name . ')',
+                            'description' => $callDesc,
+                            'created_by' => createdBy()
+                        ]);
+                    }
                     break;
             }
         }
 
-        // Create activity for attendees
-        if (isset($validated['attendees'])) {
+        // Create activity for attendees (if not already logged as parent and if call is planned)
+        if (isset($validated['attendees']) && is_array($validated['attendees']) && ($call->status ?? 'planned') !== 'held') {
+            $attendeeCallDateText = $call->start_date ? (' scheduled for ' . date('M j, Y', strtotime($call->start_date))) : '';
             foreach ($validated['attendees'] as $attendee) {
+                if (empty($attendee['type']) || empty($attendee['id'])) {
+                    continue;
+                }
+                if ($call->parent_module === $attendee['type'] && (int)$call->parent_id === (int)$attendee['id']) {
+                    continue;
+                }
+
                 switch ($attendee['type']) {
                     case 'contact':
                         $contact = \App\Models\Contact::find($attendee['id']);
@@ -260,7 +328,7 @@ class CallController extends Controller
                                 'user_id' => auth()->id(),
                                 'activity_type' => 'Call Attendee',
                                 'title' => auth()->user()->name . ' added ' . $contact->name . ' to call: ' . $call->title,
-                                'description' => 'Contact added as attendee to call scheduled for ' . date('M j, Y', strtotime($call->start_date)),
+                                'description' => 'Contact added as attendee to call' . $attendeeCallDateText,
                                 'created_by' => createdBy()
                             ]);
                         }
@@ -273,7 +341,7 @@ class CallController extends Controller
                                 'user_id' => auth()->id(),
                                 'activity_type' => 'Call Attendee',
                                 'title' => auth()->user()->name . ' added ' . $lead->name . ' to call: ' . $call->title,
-                                'description' => 'Lead added as attendee to call scheduled for ' . date('M j, Y', strtotime($call->start_date)),
+                                'description' => 'Lead added as attendee to call' . $attendeeCallDateText,
                                 'created_by' => createdBy()
                             ]);
                         }
@@ -292,35 +360,46 @@ class CallController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:65535',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i',
-            'parent_module' => 'required|in:none,lead,account,contact,opportunity,case,project',
-            'parent_id' => 'required|integer|min:1',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'start_time' => 'nullable',
+            'end_time' => 'nullable',
+            'parent_module' => 'nullable|in:none,lead,account,contact,opportunity,case,project',
+            'parent_id' => 'nullable',
             'status' => 'nullable|in:planned,held,not_held',
-            'assigned_to' => 'required|exists:users,id',
-            'attendees' => 'required|array|min:1',
-            'attendees.*.type' => 'required_with:attendees|in:user,contact,lead',
-            'attendees.*.id' => 'required_with:attendees|integer|min:1',
+            'assigned_to' => 'nullable',
+            'attendees' => 'nullable|array',
+            'attendees.*.type' => 'nullable|in:user,contact,lead',
+            'attendees.*.id' => 'nullable',
             'sync_with_google_calendar' => 'nullable|boolean',
         ]);
 
-        // Validate end datetime is after start datetime
-        $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
-        $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
-        $startDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $startDate . ' ' . $validated['start_time']);
-        $endDateTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $endDate . ' ' . $validated['end_time']);
+        $validated['status'] = $validated['status'] ?? 'planned';
+        if (isset($validated['title'])) {
+            $validated['title'] = !empty(trim($validated['title'])) ? trim($validated['title']) : ($call->title ?: __('Untitled Call'));
+        }
 
-        if ($endDateTime->lte($startDateTime)) {
-            return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+        $startDateTime = null;
+        $endDateTime = null;
+        if (!empty($validated['start_date']) && !empty($validated['start_time']) && !empty($validated['end_date']) && !empty($validated['end_time'])) {
+            $startDate = \Carbon\Carbon::parse($validated['start_date'])->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($validated['end_date'])->format('Y-m-d');
+            $startDateTime = \Carbon\Carbon::parse($startDate . ' ' . $validated['start_time']);
+            $endDateTime = \Carbon\Carbon::parse($endDate . ' ' . $validated['end_time']);
+
+            if ($endDateTime->lte($startDateTime)) {
+                return redirect()->back()->withErrors(['end_time' => __('End date and time must be after start date and time.')])->withInput();
+            }
         }
 
         // Check attendee availability
-        if (isset($validated['attendees'])) {
+        if ($startDateTime && $endDateTime && isset($validated['attendees']) && is_array($validated['attendees'])) {
             foreach ($validated['attendees'] as $attendee) {
+                if (empty($attendee['type']) || empty($attendee['id'])) {
+                    continue;
+                }
                 $callConflict = CallAttendee::where('attendee_type', $attendee['type'])
                     ->where('attendee_id', $attendee['id'])
                     ->whereHas('call', function ($q) use ($startDateTime, $endDateTime, $callId) {
@@ -350,9 +429,9 @@ class CallController extends Controller
         }
 
         // Clean up nullable fields
-        $validated['parent_module'] = ($validated['parent_module'] ?? null) === 'none' ? null : ($validated['parent_module'] ?? null);
-        $validated['parent_id'] = empty($validated['parent_id']) || $validated['parent_id'] === 'select' ? null : (int)$validated['parent_id'];
-        $validated['assigned_to'] = empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned' ? null : (int)$validated['assigned_to'];
+        $validated['parent_module'] = (empty($validated['parent_module']) || $validated['parent_module'] === 'none') ? null : $validated['parent_module'];
+        $validated['parent_id'] = (empty($validated['parent_id']) || $validated['parent_id'] === 'select') ? null : (int)$validated['parent_id'];
+        $validated['assigned_to'] = (empty($validated['assigned_to']) || $validated['assigned_to'] === 'unassigned') ? null : (int)$validated['assigned_to'];
 
         // Validate parent_id exists if parent_module is set
         if ($validated['parent_module'] && $validated['parent_id']) {
@@ -361,19 +440,29 @@ class CallController extends Controller
 
         $call->update($validated);
 
-        if ($call->google_calendar_event_id) {
-            $calendarService = new GoogleCalendarService();
-            $calendarService->updateEvent($call->google_calendar_event_id, $call, createdBy(), 'call');
+        $call->attendees()->delete();
+        if (isset($validated['attendees']) && is_array($validated['attendees'])) {
+            foreach ($validated['attendees'] as $attendee) {
+                if (!empty($attendee['type']) && !empty($attendee['id'])) {
+                    CallAttendee::create([
+                        'call_id' => $call->id,
+                        'attendee_type' => $attendee['type'],
+                        'attendee_id' => $attendee['id'],
+                    ]);
+                }
+            }
         }
 
-        $call->attendees()->delete();
-        if (isset($validated['attendees'])) {
-            foreach ($validated['attendees'] as $attendee) {
-                CallAttendee::create([
-                    'call_id' => $call->id,
-                    'attendee_type' => $attendee['type'],
-                    'attendee_id' => $attendee['id'],
-                ]);
+        $call->load('attendees');
+
+        if ($call->google_calendar_event_id && $call->start_date) {
+            $calendarService = new GoogleCalendarService();
+            $calendarService->updateEvent($call->google_calendar_event_id, $call, createdBy(), 'call');
+        } elseif ($request->sync_with_google_calendar && $call->start_date) {
+            $calendarService = new GoogleCalendarService();
+            $eventId = $calendarService->createEvent($call, createdBy(), 'call');
+            if ($eventId) {
+                $call->update(['google_calendar_event_id' => $eventId]);
             }
         }
 

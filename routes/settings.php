@@ -70,6 +70,7 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
 
     // General settings page with system and company settings
     Route::get('settings', [SettingsController::class, 'index'])->name('settings');
+    Route::get('settings/index', [SettingsController::class, 'index'])->name('settings.index');
 
     // System Settings routes (Super Admin)
     Route::post('settings/system', [SystemSettingsController::class, 'update'])->name('settings.system.update');
@@ -77,6 +78,7 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
 
     // Company System Settings routes
     Route::post('settings/company/system', [CompanySystemSettingsController::class, 'update'])->name('settings.company.system.update');
+    Route::post('settings/daily-report', [CompanySystemSettingsController::class, 'updateDailyReport'])->name('settings.daily-report.update');
 
     Route::post('settings/recaptcha', [SystemSettingsController::class, 'updateRecaptcha'])->name('settings.recaptcha.update');
     Route::post('settings/chatgpt', [SystemSettingsController::class, 'updateChatgpt'])->name('settings.chatgpt.update');
